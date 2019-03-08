@@ -16,7 +16,7 @@ import { SomeClass } from 'somewhere'
 const pool = new Pool({
   // Required parameters:
 
-  // Synchronous factor method that creates new instances
+  // Synchronous factory method that creates new instances
   factory: () => new SomeClass()
   // Maximum pool size
   max: 10,
@@ -100,3 +100,9 @@ pool.acquire({ timeout: 1000 }).then(poolItem => {
   poolItem.release(!wasSuccessful)
 })
 ```
+
+## Future Work
+
+* A few more, and more robust, tests
+* Asynchronous create method?
+* That's about it. It doesn't need to do much.
