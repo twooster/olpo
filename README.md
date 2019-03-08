@@ -1,5 +1,7 @@
 # OLPO - A TypeScript Resource Pool
 
+[![CircleCI](https://circleci.com/gh/twooster/olpo.svg?style=svg)](https://circleci.com/gh/twooster/olpo)
+
 OLPO is yet another TypeScript resource pool. It's written to be small (5.8k
 unminified), fast, Promise-native, and written in TypeScript.
 
