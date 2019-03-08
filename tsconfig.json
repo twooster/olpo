@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+    "declaration": true,
+    "lib": [
+      "es6"
+    ],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "outDir": "./dist",
+    "pretty": true,
+    "rootDir": "./",
+    "strict": true,
+    "target": "es6"
+  },
+  "include": [
+    "**/*.ts"
+  ]
+}
