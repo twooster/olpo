@@ -1,9 +1,9 @@
 # OLPO - A TypeScript Resource Pool
 
-OLPO is yet another TypeScript resource pool. It's written to be small,
-fast, Promise-native, TypeScript native, and type-safe.
+OLPO is yet another TypeScript resource pool. It's written to be small (5.8k
+unminified), fast, Promise-native, and written in TypeScript.
 
-Requires ES6 support.
+Still pretty beta. Requires ES6 support.
 
 ## Usage
 
