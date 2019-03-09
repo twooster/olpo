@@ -3,37 +3,42 @@
  */
 export interface PoolOptions<T> {
   /**
-   * Required factory function. It can return an object, or a promise that will
-   * eventually resolve to an object.
+   * Called to create a new pool item. Can be asynchronous or asynchronous.
+   * Take care not to throw from this function. If creation could fail,
+   * it's recommended that you catch any errors and retry creation until
+   * it succeeds. If you need timeouts, you'll need to implement them
+   * yourself.
    */
-  factory: () => PromiseLike<T> | T
+  create: () => PromiseLike<T> | T
   /**
-   * Which Promise class to use (defaults to ES6 Promise)
-   */
-  promise?: PromiseConstructor
-  /**
-   * Function that will be called to "verify" the viability of a pool resource
-   * immediately before acquisition. It's passed an `UnreleasableItem` structure,
-   * which allows consumers to reject the pool item based not only on its
-   * attributes, but also on the number of uses, total lifetime, etc.
+   * Called to verify that an item is still valid for use. Note that this
+   * function will be called with a [[VerifiableItem]] -- e.g., a wrapped
+   * item with attributes you could use to determine item validity.
    *
    * If this function returns a Promise, that Promise will be awaited for
-   * its results.
+   * its results. Take care not to throw from this function.
    */
   verify?: (t: InspectableItem<T>) => PromiseLike<boolean> | boolean
   /**
-   * The maximum pool size, or Infinite for no maximum
+   * Called to dispose of an item. If asynchronous, the results of disposal
+   * will be awaited before space in the pool is released. Take care not to
+   * throw from this function.
+   */
+  dispose?: (t: InspectableItem<T>) => PromiseLike<void> | void
+  /**
+   * The minimum pool size. If this value is greater than zero, then the pool
+   * will always guarantee that the pool has at least this many items
+   * pre-created. This value must be 0 <= min <= max.
+   */
+  min?: number
+  /**
+   * The maximum pool size, or Infinite for no maximum. Must be >= 0.
    * @required
    */
   max: number
   /**
-   * The minimum pool size. If this value is greater than zero, then the pool
-   * will always guarantee that the pool has at least this many items
-   * pre-created. This value must be less than `max`.
-   */
-  min?: number
-  /**
    * The default timeout for acquisitions, or undefined for no timeout.
+   * Must be >= 0.
    */
   timeout?: number
   /**
@@ -49,17 +54,14 @@ export interface PoolOptions<T> {
    */
   onRelease?: (item: InspectableItem<T>) => void
   /**
-   * A callback that will be called just after an item has been "disposed" of
-   * -- that is, it has failed verification, or was released back to the
-   * queue with the "dispose" flag set to true. Take care that this
-   * method does not throw.
-   */
-  onDispose?: (item: InspectableItem<T>) => void
-  /**
    * A callback that will be called if an acquire attempt times out. Take
    * care that this method does not throw.
    */
   onTimeout?: (event: { timeout: number }) => void
+  /**
+   * Which Promise class to use. Defaults to [[Promise]]
+   */
+  promise?: PromiseConstructor
 }
 
 export interface BaseItem<T> {
@@ -109,70 +111,148 @@ interface Waiting<T> {
 }
 
 /**
- * A call to `acquire` may result in a timeout, in which case
- * the promise returned by `acquire` will reject with this error.
+ * Pending acquisitions will be rejected with this error if they
+ * exceed the allowed timeout.
  */
 export class TimeoutError extends Error {
   constructor(timeout: number) {
-    super('Timeout acquiring pool item (' + timeout + ' ms)')
+    super(`Timeout acquiring pool item (${timeout} ms)`)
   }
 }
 
 /**
- * This error is thrown when an item that has already been released
- * to the pool is re-released to the pool without first being acquired.
+ * Error that will be thrown if a pool item is released more than once
+ * back to the pool.
  */
 export class DoubleReleaseError extends Error {
   constructor() {
-    super('Double release')
+    super('Double release of pool item')
   }
 }
 
-const alwaysTrue = () => true
-const noop = () => undefined
+/**
+ * Pending acquisitions will be rejected with this error if the
+ * pool is disposed with `rejectWaiting` as true
+ */
+export class PoolDisposingError extends Error {
+  constructor() {
+    super('Pool disposing, all pending acquisitions cancelled')
+  }
+}
+
 const throwDoubleRelease = (): never => { throw new DoubleReleaseError() }
-
-
 
 /**
  * The resource Pool class.
  */
 export class Pool<T> {
+  /**
+   * List containing idle items
+   * @private
+   */
   idle: InternalItem<T>[] = []
+  /**
+   * List containing all waiting acquisitions
+   */
   waiting: Waiting<T>[] = []
-  verify: (t: InspectableItem<T>) => PromiseLike<boolean> | boolean
-  factory: () => PromiseLike<T> | T
-  timeout?: number
-  promise: PromiseConstructor
-  max: number
-  min: number
-  checkedOut: number = 0
-  verifying: number = 0
-  creating: number = 0
-  onAcquire: (item: InspectableItem<T>) => void
-  onRelease: (item: InspectableItem<T>) => void
-  onDispose: (item: InspectableItem<T>) => void
-  onTimeout: (event: { timeout: number }) => void
 
   /**
-   * Instantiates a Pool class. See PoolOptions for more information.
+   * The promise constructor to use
+   */
+  promise: PromiseConstructor
+  /**
+   * Default acquistion timeout
+   */
+  timeout: number
+  /**
+   * Minimum pool size
+   */
+  min: number
+  /**
+   * Maximum pool size
+   */
+  max: number
+  /**
+   * Item creation function
+   */
+  createCb: () => PromiseLike<T> | T
+  /**
+   * Item verification function
+   */
+  verifyCb?: (t: InspectableItem<T>) => PromiseLike<boolean> | boolean
+  /**
+   * Item disposal function
+   */
+  disposeCb?: (item: InspectableItem<T>) => PromiseLike<void> | void
+  /**
+   * On-acquistion callback
+   */
+  onAcquire?: (item: InspectableItem<T>) => void
+  /**
+   * On-release callback
+   */
+  onRelease?: (item: InspectableItem<T>) => void
+  /**
+   * On timeout callback
+   */
+  onTimeout?: (event: { timeout: number }) => void
+
+  /*
+   * The current pool size
+   */
+  poolSize: number = 0
+  verifyingCount: number = 0
+
+  /**
+   * If set, the pool is currently disposing
+   */
+  disposing?: {
+    promise: Promise<void>
+    /**
+     * @private
+     */
+    _resolve: () => void
+  } = undefined
+
+  /**
+   * Flag that's `true` if the pool has been disposed.
+   */
+  disposed: boolean = false
+
+
+  /**
+   * Instantiates a Pool class. See [[PoolOptions]] for more information on
+   * on configuring the pool.
+   *
+   * @param options the pool options
    */
   constructor(options: PoolOptions<T>) {
     this.max = options.max
-    this.min = options.min || 0
-    if (this.min > this.max) {
-      throw new Error('Minimum pool size greater than maximum pool size')
+    if (this.max < 0) {
+      throw new Error(`Maximum pool size (${this.max}) must be at least 0`)
     }
-    this.factory = options.factory
-    this.timeout = options.timeout
-    this.verify = options.verify || alwaysTrue
-    this.onAcquire = options.onAcquire || noop
-    this.onTimeout = options.onTimeout || noop
-    this.onRelease = options.onRelease || noop
-    this.onDispose = options.onDispose || noop
+    this.min = options.min || 0
+    if (this.min < 0) {
+      throw new Error(`Minimum pool size (${this.min}) must be at least 0`)
+    }
+    if (this.min > this.max) {
+      throw new Error(`Minimum pool size (${this.min}) must be less than or equal to maximum pool size (${this.max}))`)
+    }
+    this.timeout = options.timeout === undefined ? Infinity : options.timeout
+    if (this.timeout < 0) {
+      throw new Error(`Minimum timeout (${this.timeout} ms) is 0 ms`)
+    }
+    this.createCb = options.create
+    this.verifyCb = options.verify
+    this.disposeCb = options.dispose
+    this.onAcquire = options.onAcquire
+    this.onTimeout = options.onTimeout
+    this.onRelease = options.onRelease
     this.promise = options.promise || Promise
 
-    this._pulseQueue()
+    while (this.poolSize < this.min) {
+      this._create()
+    }
   }
 
   /**
@@ -191,41 +271,50 @@ export class Pool<T> {
    * back to the pool after the callback returns (or throws). Returns
    * the a Promise that resolves to the value of the provided callback.
    *
-   * @param cb
+   * @param cb callback that will receive the item
    * @param opts
+   * @param opts.wrappedItem must be false or undefined
    * @param opts.timeout timeout in milliseconds before which this function
    *   rejects its returned Promise with a TimeoutError.
    * @param opts.disposeOnError if true, an error in the callback will
    *   cause the acquired pool item to be disposed
    */
-  acquire<U>(cb: (item: T) => U, opts?: { timeout?: number, disposeOnError?: boolean, resolveItem?: false }): Promise<U>
+  acquire<U>(cb: (item: T) => U, opts?: { timeout?: number, disposeOnError?: boolean, wrappedItem?: false }): Promise<U>
   /**
    * Acquires an item from the pool. Calls the provided callback with the
-   * unwrapped item upon acquisition. Automatically releases the item
+   * wrapped item upon acquisition. Automatically releases the item
    * back to the pool after the callback returns (or throws). Returns
    * the a Promise that resolves to the value of the provided callback.
    *
-   * @param cb
+   * Be sure not to explicitly `release` the item, or a double-release
+   * error will occur.
+   *
+   * @param cb callback that will received the wrapped item
    * @param opts
-   * @param opts.resolveItem must be true
+   * @param opts.wrappedItem must be true to receive the unwrapped item
    * @param opts.timeout timeout in milliseconds before which this function
    *   rejects its returned Promise with a TimeoutError.
-   * @param opts.disposeOnError if true, an error in the callback will
+   * @param opts.disposeOnError if true, a thrown error in the callback will
    *   cause the acquired pool item to be disposed
    */
-  acquire<U>(cb: (item: Item<T>) => U, opts?: { timeout?: number, disposeOnError?: boolean, resolveItem: true }): Promise<U>
+  acquire<U>(cb: (item: InspectableItem<T>) => U, opts?: { timeout?: number, disposeOnError?: boolean, wrappedItem: true }): Promise<U>
   acquire<U>(
-    cbOrOpts?: { timeout?: number } | ((item: T) => U) | ((item: Item<T>) => U),
-    opts?: { timeout?: number, disposeOnError?: boolean, resolveItem?: boolean }
+    cbOrOpts?: { timeout?: number } | ((item: T) => U) | ((item: InspectableItem<T>) => U),
+    opts?: { timeout?: number, disposeOnError?: boolean, wrappedItem?: boolean }
   ): Promise<Item<T>> | Promise<U> {
+    if (this.disposing || this.disposed) {
+      return this.promise.reject(new Error('Cannot acquire while the pool is disposing or disposed')) as any
+    }
+
     if (typeof cbOrOpts === 'function') {
       let item: Item<T>
       const disposeOnError = opts && opts.disposeOnError
-      const resolveItem = opts && opts.resolveItem
-      return this.acquire(opts)
+      const wrappedItem = opts && opts.wrappedItem
+      const timeout = opts && opts.timeout !== undefined ? opts.timeout : this.timeout
+      return this._acquire(timeout)
         .then(i => {
           item = i
-          return resolveItem ? i : i.item
+          return wrappedItem ? i : i.item
         })
         .then(cbOrOpts as (p: any) => U)
         .then(result => {
@@ -235,24 +324,44 @@ export class Pool<T> {
           item.release(disposeOnError)
           throw err
         })
+    } else {
+      const timeout = cbOrOpts && cbOrOpts.timeout !== undefined ? cbOrOpts.timeout : this.timeout
+      return this._acquire(timeout)
     }
+  }
 
-    const timeout = cbOrOpts && cbOrOpts.timeout !== undefined ? cbOrOpts.timeout : this.timeout
+  _acquire(timeout: number): Promise<Item<T>> {
+    if (timeout < 0) {
+      return this.promise.reject(Error(`Cannot acquire with a timeout (${timeout} ms) less than 0 ms`))
+    }
     return new this.promise<Item<T>>((resolve, reject) => {
       let tid: any
 
       const waiting: Waiting<T> = {
-        resolve: (item: InternalItem<T>): void =>  {
+        resolve: (item: InternalItem<T>): void => {
           if (tid !== undefined) {
             clearTimeout(tid)
+            tid = undefined
           }
-          ++this.checkedOut
           item.lastAcquireTime = new Date()
-          item.release = (dispose?: boolean): void => this.release(item, dispose)
+          item.release = (dispose?: boolean): void => {
+            this.release(item, dispose)
+          }
           this.onAcquire && this.onAcquire(item)
           resolve(item)
         },
-        reject
+        reject: (err: any) => {
+          if (tid !== undefined) {
+            clearTimeout(tid)
+            tid = undefined
+          }
+
+          // This is only needed to support disposing while max === 0
+          if (this.disposing && this.poolSize === 0) {
+            this.disposing._resolve()
+          }
+          reject(err)
+        }
       }
 
       if (timeout !== undefined && timeout !== Infinity) {
@@ -264,7 +373,13 @@ export class Pool<T> {
       }
 
       this.waiting.push(waiting)
-      this._pulseQueue()
+      if (this.verifyingCount < this.waiting.length) {
+        if (this.idle.length) {
+          this._verify(this.idle.pop() as InternalItem<T>)
+        } else if (this.poolSize < this.max) {
+          this._create()
+        }
+      }
     })
   }
 
@@ -287,9 +402,6 @@ export class Pool<T> {
       throw new DoubleReleaseError()
     }
 
-    --this.checkedOut
-
-
     const now: Date = new Date()
     ;(item as InternalItem<T>).uses += 1
     ;(item as InternalItem<T>).release = throwDoubleRelease
@@ -298,31 +410,73 @@ export class Pool<T> {
     this.onRelease && this.onRelease(item)
 
     if (dispose) {
-      ;(item as InternalItem<T>).disposedTime = now
-      this.onDispose && this.onDispose(item)
+      this._dispose(item)
+    } else if (this.verifyingCount < this.waiting.length) {
+      this._verify(item)
+    } else if (this.disposing) {
+      this._dispose(item)
     } else {
       this.idle.push(item)
     }
-    this._pulseQueue()
-  }
-
-  /**
-   * Returns the current active pool size.
-   */
-  public poolSize(): number {
-    return (this.verifying + this.checkedOut + this.idle.length)
   }
 
   /**
    * Returns the number of waiting acquisitions.
    */
-  public waitingSize(): number {
+  waitingCount(): number {
     return this.waiting.length
   }
 
   /**
-   * Simple item building helper function
-   * @private
+   * Disposes of the pool. After this method has been called, any new
+   * acquisitions will throw an error.
+   *
+   * @param rejectWaiting if true, indicates that all waiting acquisition
+   *   promises should be rejected with a [[PoolDisposingError]]; otherwise
+   *   these pool items will be allowed to resolve as normal
+   * @returns a promise that resolves when the pool disposal has completed (all
+   *   pending/checked out acquisitions, and all disposals have cleared)
+   */
+  public dispose(rejectWaiting?: boolean): Promise<void> {
+    if (this.disposed) {
+      return this.promise.resolve()
+    }
+
+    if (!this.disposing) {
+      if (this.poolSize === 0) {
+        this.disposed = true
+        return this.promise.resolve()
+      }
+
+      let _resolve: any
+      let promise = new this.promise(resolve => {
+        _resolve = resolve
+      }).then(() => {
+        this.disposing = undefined
+        this.disposed = true
+      })
+      this.disposing = { promise, _resolve }
+    }
+
+    if (this.idle.length) {
+      let idle
+      while (idle = this.idle.pop()) {
+        this._dispose(idle)
+      }
+    }
+
+    if (rejectWaiting) {
+      let waiting
+      while (waiting = this.waiting.pop()) {
+        waiting.reject(new PoolDisposingError())
+      }
+    }
+
+    return this.disposing.promise
+  }
+
+  /**
+   * Makes an InternalItem
    */
   private _makeItem(item: T): InternalItem<T> {
     return {
@@ -338,102 +492,73 @@ export class Pool<T> {
   }
 
   /**
-   * Creates an item and either pushes it to the idle pool
-   * if creation was synchronous, or increments the internal
-   * creating counter and awaits the async results.
-   *
-   * @private
+   * Creates a pool item, and handles verification of the item after creation,
+   * or automatic disposal if the item is not needed and the pool is in
+   * disposal.
    */
   private _create(): void {
-    const item = this.factory()
-    if (item && typeof item === 'object' && 'then' in item) {
-      ++this.creating
-      item.then(item => {
-        --this.creating
-        this.idle.push(this._makeItem(item))
-        this._pulseQueue()
-      }, () => {
-        --this.creating
-        this._pulseQueue()
+    ++this.poolSize
+    this.promise.resolve(this.createCb())
+      .then(item => {
+        const internalItem = this._makeItem(item)
+        if (this.verifyingCount < this.waiting.length) {
+          this._verify(internalItem)
+        } else if (this.disposing) {
+          this._dispose(internalItem)
+        } else {
+          this.idle.push(internalItem)
+        }
       })
-    } else {
-      this.idle.push(this._makeItem(item as T))
-    }
   }
 
   /**
-   * Verifies an item is still good for use. If verification can be
-   * performed synchronously, and it fails, this method will return
-   * `true` indicating that another item could be created. Otherwise, this
-   * function returns false, indicating that verification was either
-   * successful or is still pending.
+   * Verifies that an item is valid for use. Does not protect against double
+   * verifications.
    *
-   * @private
+   * If verification succeeds, will handle delivering the item on to the next
+   * waiting acquisition if available. Otherwise will either add the item to
+   * the idle queue, or, if the pool is disposing, will automatically dispose
+   * of it.
+   *
+   * If verification fails, will handle disposal via `_dispose`, which handles
+   * recreation if necessary to meet pool demands.
    */
-  private _verify(item: InternalItem<T>): boolean {
-    const verify = this.verify(item)
-    if (typeof verify === 'boolean') {
-      if (verify) {
-        (this.waiting.shift() as Waiting<T>).resolve(item)
-      } else {
-        item.disposedTime = new Date()
-        this.onDispose && this.onDispose(item)
-        return true
-      }
-    } else {
-      ++this.verifying
-      verify.then(verify => {
-        --this.verifying
-        if (verify) {
+  private _verify(item: InternalItem<T>): void {
+    ++this.verifyingCount
+    this.promise.resolve(this.verifyCb ? this.verifyCb(item) : true)
+      .then(itemIsOk => {
+        --this.verifyingCount
+        if (itemIsOk) {
           if (this.waiting.length) {
             (this.waiting.shift() as Waiting<T>).resolve(item)
+          } else if (this.disposing) {
+            this._dispose(item)
           } else {
             this.idle.push(item)
           }
         } else {
-          item.disposedTime = new Date()
-          this.onDispose && this.onDispose(item)
-          this._pulseQueue()
+          this._dispose(item)
         }
-      }, err => {
-        --this.verifying
-        throw err
       })
-    }
-    return false
   }
 
   /**
-   * Pulses the queue:
-   * 1. Ensures that the queue has its minimum number of items
-   * 2. Creates items (up to `max`) to attempt to fulfill waiting acquisitions
-   * 3. Kicks off verifications to fulfill waiting acquisitions
-   *
-   * @private
+   * Disposes of an item. Will trigger item recreation if necessary, or
+   * potentially resolve the `disposing` promise during pool-disposal.
    */
-  private _pulseQueue(): void {
-    while (true) {
-      const canCreate = this.max - (this.verifying + this.creating + this.checkedOut + this.idle.length)
-      const waiting = this.waiting.length - this.verifying
-      const desired = waiting > this.min ? waiting : this.min
-
-      let toCreate = canCreate < desired ? canCreate : desired
-      while (toCreate > 0) {
-        --toCreate
-        this._create()
-      }
-
-      let couldRecreate: boolean = false
-
-      let toVerify = waiting < this.idle.length ? waiting : this.idle.length
-      while (toVerify > 0) {
-        --toVerify
-        couldRecreate = this._verify(this.idle.pop() as InternalItem<T>) || couldRecreate
-      }
-
-      if (!couldRecreate) {
-        return
-      }
-    }
+  private _dispose(item: InternalItem<T>): void {
+    this.promise.resolve(this.disposeCb ? this.disposeCb(item) : undefined)
+      .then(() => {
+        --this.poolSize
+        if (this.verifyingCount < this.waiting.length) {
+          this._create()
+        } else if (this.disposing) {
+          if (this.poolSize === 0) {
+            this.disposing._resolve()
+          }
+        } else if (this.poolSize < this.min) {
+          this._create()
+        }
+      })
   }
 }
