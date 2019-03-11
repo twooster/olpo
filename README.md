@@ -54,7 +54,7 @@ const pool = new Pool({
     if (now - acq.createTime > 60000) {
       return false;
     }
-    if (now - acq.lastRelaseTime > 20000) {
+    if (now - acq.lastReleaseTime > 20000) {
       return false;
     }
     if (now - acq.lastAcquireTime > 10000) {
