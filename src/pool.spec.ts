@@ -14,7 +14,7 @@ describe('Pool', () => {
     test('throws an error with a timeout < 0', () => {
       expect(() => new Pool({
         create: () => 0,
-        timeout: -1,
+        acquireTimeout: -1,
         max: 1
       })).toThrow()
     })
@@ -106,7 +106,7 @@ describe('Pool', () => {
             create: () => {},
             verify: () => new Promise(resolve => setTimeout(() => resolve(true), 20)),
             max: 1,
-            timeout: 10
+            acquireTimeout: 10
           })
 
           const item1Promise = p.acquire()

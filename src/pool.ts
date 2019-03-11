@@ -9,10 +9,7 @@ import { TimeoutError, DoubleReleaseError, PoolDisposingError } from './errors'
 export interface PoolOptions<T> {
   /**
    * Called to create a new pool item. Can be asynchronous or asynchronous.
-   * Take care not to throw from this function. If creation could fail,
-   * it's recommended that you catch any errors and retry creation until
-   * it succeeds. If you need timeouts, you'll need to implement them
-   * yourself.
+   * If you need creation timeouts, you'll need to implement them yourself.
    */
   create: () => PromiseLike<T> | T
   /**
@@ -21,13 +18,12 @@ export interface PoolOptions<T> {
    * item with attributes you could use to determine item validity.
    *
    * If this function returns a Promise, that Promise will be awaited for
-   * its results. Take care not to throw from this function.
+   * its results.
    */
   verify?: (t: InspectableItem<T>) => PromiseLike<boolean> | boolean
   /**
    * Called to dispose of an item. If asynchronous, the results of disposal
-   * will be awaited before space in the pool is released. Take care not to
-   * throw from this function.
+   * will be awaited before space in the pool is released.
    */
   dispose?: (t: InspectableItem<T>) => PromiseLike<void> | void
   /**
@@ -42,10 +38,17 @@ export interface PoolOptions<T> {
    */
   max: number
   /**
-   * The default timeout for acquisitions, or undefined for no timeout.
-   * Must be >= 0.
+   * The default timeout for acquisitions, or undefined/Infinity for no
+   * timeout. If defined, must be >= 0.
    */
-  timeout?: number
+  acquireTimeout?: number
+  /**
+   * Specifies how long a pool item can remain idle before it is automatically
+   * disposed of. Note that if disposal would drop the pool below its minimum
+   * size, disposal will typically not occur. If defined, must be >= 0, if
+   * undefined or Infinity, no idle timeout will be triggered.
+   */
+  idleTimeout?: number
   /**
    * A callback that will be called just before an item is successfully
    * acquired from the pool. Take care that this function does not
@@ -63,6 +66,11 @@ export interface PoolOptions<T> {
    * care that this method does not throw.
    */
   onTimeout?: (event: { timeout: number }) => void
+  /**
+   * A callback that will be called if there is an error during creation,
+   * verification, or disposal of a queue item.
+   */
+  onError?: (when: 'create' | 'verify' | 'dispose', err: any) => void
   /**
    * Which Promise class to use. Defaults to ES6 `Promise`.
    */
@@ -113,7 +121,16 @@ export interface BaseItem<T> {
  * @typeparam T the item type
  */
 interface ReleasableItem<T> extends BaseItem<T> {
-  release: (discard?: boolean) => Promise<void>
+  /**
+   * Releases the item back into the pool. If `discard` is true, the
+   * item will be discarded instead.
+   */
+  release: (discard?: boolean) => void
+  /**
+   * @private
+   * @hidden
+   */
+  idleTimeoutId: any
 }
 
 /**
@@ -143,7 +160,7 @@ interface Waiting<T> {
 }
 
 /**
- * Options for acquiring with a promise.
+ * Options for acquiring a pool item, returning a promise
  */
 export interface AcquireOpts {
   /**
@@ -154,7 +171,7 @@ export interface AcquireOpts {
 }
 
 /**
- * Options for acquiring with a callback.
+ * Options for acquiring a pool item with a callback
  */
 export interface AcquireCallbackOpts extends AcquireOpts {
   /**
@@ -175,6 +192,16 @@ export interface AcquireCallbackOpts extends AcquireOpts {
 const throwDoubleRelease = (): never => { throw new DoubleReleaseError() }
 
 /**
+ * @hidden
+ */
+const cancelIdleTimeout = <T>(item: ReleasableItem<T>) => {
+  if (item.idleTimeoutId) {
+    clearTimeout(item.idleTimeoutId)
+    item.idleTimeoutId = undefined
+  }
+}
+
+/**
  * The resource Pool class.
  *
  * @typeparam T (usually inferred from [[PoolOptions]]) the type of item this
@@ -188,7 +215,11 @@ export class Pool<T> {
   /**
    * Default acquistion timeout
    */
-  timeout: number
+  acquireTimeout: number
+  /**
+   * Idle timeout
+   */
+  idleTimeout: number
   /**
    * Minimum pool size
    */
@@ -221,6 +252,10 @@ export class Pool<T> {
    * On timeout callback
    */
   onTimeout: undefined | ((event: { timeout: number }) => void)
+  /**
+   * On error callback
+   */
+  onError: undefined | ((when: 'create' | 'verify' | 'dispose', err: any) => void)
 
   /*
    * The current pool size, counting items checked out, in creation,
@@ -264,6 +299,13 @@ export class Pool<T> {
   private waiting: Waiting<T>[] = []
 
   /**
+   * The number of waiting acquisitions.
+   */
+  get waitingSize(): number {
+    return this.waiting.length
+  }
+
+  /**
    * Instantiates a Pool class. See [[PoolOptions]] for more information on
    * on configuring the pool.
    *
@@ -281,9 +323,13 @@ export class Pool<T> {
     if (this.min > this.max) {
       throw new Error(`Minimum pool size (${this.min}) must be less than or equal to maximum pool size (${this.max}))`)
     }
-    this.timeout = options.timeout === undefined ? Infinity : options.timeout
-    if (this.timeout < 0) {
-      throw new Error(`Minimum timeout (${this.timeout} ms) is 0 ms`)
+    this.acquireTimeout = options.acquireTimeout === undefined ? Infinity : options.acquireTimeout
+    if (this.acquireTimeout < 0) {
+      throw new Error(`Minimum timeout (${this.acquireTimeout} ms) is 0 ms`)
+    }
+    this.idleTimeout = options.idleTimeout === undefined ? Infinity : options.idleTimeout
+    if (this.idleTimeout < 0) {
+      throw new Error(`Minimum idle timeout (${this.idleTimeout}) is 0 ms`)
     }
     this.createCb = options.create
     this.verifyCb = options.verify
@@ -291,10 +337,24 @@ export class Pool<T> {
     this.onAcquire = options.onAcquire
     this.onTimeout = options.onTimeout
     this.onRelease = options.onRelease
+    this.onError = options.onError
     this.promise = options.promise || Promise
 
     while (this.poolSize < this.min) {
       this._create()
+    }
+  }
+
+  /**
+   * Utility method that either calls the error handler or throws the error
+   * (will typically result in uncaught promises)
+   * @hidden
+   */
+  _handleError(when: 'create' | 'verify' | 'dispose', err: any) {
+    if (this.onError) {
+      this.onError(when, err)
+    } else {
+      throw err
     }
   }
 
@@ -337,7 +397,7 @@ export class Pool<T> {
       let item: Item<T>
       const disposeOnError = opts && opts.disposeOnError
       const wrappedItem = opts && opts.wrappedItem
-      const timeout = opts && opts.timeout !== undefined ? opts.timeout : this.timeout
+      const timeout = opts && opts.timeout !== undefined ? opts.timeout : this.acquireTimeout
       return this._acquire(timeout)
         .then(i => {
           item = i
@@ -352,7 +412,7 @@ export class Pool<T> {
           throw err
         })
     } else {
-      const timeout = cbOrOpts && cbOrOpts.timeout !== undefined ? cbOrOpts.timeout : this.timeout
+      const timeout = cbOrOpts && cbOrOpts.timeout !== undefined ? cbOrOpts.timeout : this.acquireTimeout
       return this._acquire(timeout)
     }
   }
@@ -375,7 +435,7 @@ export class Pool<T> {
             tid = undefined
           }
           item.lastAcquireTime = new Date()
-          item.release = (dispose?: boolean): Promise<void> =>
+          item.release = (dispose?: boolean): void =>
             this.release(item, dispose)
           this.onAcquire && this.onAcquire(item)
           resolve(item)
@@ -394,7 +454,7 @@ export class Pool<T> {
         }
       }
 
-      if (timeout !== undefined && timeout !== Infinity) {
+      if (timeout !== Infinity) {
         tid = setTimeout(() => {
           this.waiting.splice(this.waiting.indexOf(waiting), 1)
           waiting.reject(new TimeoutError(timeout))
@@ -405,7 +465,9 @@ export class Pool<T> {
       this.waiting.push(waiting)
       if (this.verifyingCount < this.waiting.length) {
         if (this.idle.length) {
-          this._verify(this.idle.pop() as ReleasableItem<T>)
+          const idle = this.idle.pop() as ReleasableItem<T>
+          cancelIdleTimeout(idle)
+          this._verify(idle)
         } else if (this.poolSize < this.max) {
           this._create()
         }
@@ -424,41 +486,53 @@ export class Pool<T> {
    *   item has been added back into internal queues, or disposed if
    *   if `dispose` was true or if the pool is currently `disposing`
    */
-  release(item: ReleasableItem<T> | Item<T>, dispose?: boolean): Promise<void> {
+  release(item: ReleasableItem<T> | Item<T>, dispose?: boolean): void {
     if (item.disposedTime) {
       throw new Error('Cannot release a disposed item')
     }
     if (item.pool !== this) {
-      throw new Error('Cannot release an unrelated item into this pool')
+      throw new Error('Cannot release an unrelated item into the pool')
     }
     if (item.release === throwDoubleRelease) {
       throw new DoubleReleaseError()
     }
 
+    return this._release(item as ReleasableItem<T>, !!dispose)
+  }
+
+  /**
+   * @hidden
+   */
+  _release(item: ReleasableItem<T>, dispose: boolean): void {
     const now: Date = new Date()
-    ;(item as ReleasableItem<T>).uses += 1
-    ;(item as ReleasableItem<T>).release = throwDoubleRelease
-    ;(item as ReleasableItem<T>).lastReleaseTime = now
+    item.uses += 1
+    item.release = throwDoubleRelease
+    item.lastReleaseTime = now
+    if (this.idleTimeout !== Infinity) {
+      item.idleTimeoutId = setTimeout(() => {
+        // It's possible that this could mildly over-dispose if another dispoal
+        // is already in progress (counting towards the overall poolSize).
+        // Accomodating that edge case probably isn't worth the added
+        // complexity.
+        item.idleTimeoutId = undefined
+        if (this.poolSize > this.min) {
+          this.idle.splice(this.idle.indexOf(item), 1)
+          this._dispose(item)
+        }
+      }, this.idleTimeout)
+    }
 
     this.onRelease && this.onRelease(item)
 
     if (dispose) {
-      return this._dispose(item)
+      this._dispose(item)
     } else if (this.verifyingCount < this.waiting.length) {
       this._verify(item)
     } else if (this.disposing) {
-      return this._dispose(item)
+      this._dispose(item)
     } else {
       this.idle.push(item)
     }
-    return this.promise.resolve()
-  }
-
-  /**
-   * The number of waiting acquisitions.
-   */
-  get waitingSize(): number {
-    return this.waiting.length
   }
 
   /**
@@ -495,6 +569,7 @@ export class Pool<T> {
     if (this.idle.length) {
       let idle
       while (idle = this.idle.pop()) {
+        cancelIdleTimeout(idle)
         this._dispose(idle)
       }
     }
@@ -518,6 +593,7 @@ export class Pool<T> {
     return {
       creationTime: new Date(),
       disposedTime: undefined,
+      idleTimeoutId: undefined,
       item,
       lastAcquireTime: undefined,
       lastReleaseTime: undefined,
@@ -536,7 +612,7 @@ export class Pool<T> {
    */
   private _create(): void {
     ++this.poolSize
-    this.promise.resolve(this.createCb())
+    new this.promise<T>(resolve => resolve(this.createCb()))
       .then(item => {
         const internalItem = this._makeItem(item)
         if (this.verifyingCount < this.waiting.length) {
@@ -546,6 +622,13 @@ export class Pool<T> {
         } else {
           this.idle.push(internalItem)
         }
+      }, err => {
+        --this.poolSize
+        if ((this.verifyingCount < this.waiting.length ||
+            (this.poolSize < this.min && !this.disposing))) {
+          this._create()
+        }
+        this._handleError('create', err)
       })
   }
 
@@ -565,21 +648,31 @@ export class Pool<T> {
    */
   private _verify(item: ReleasableItem<T>): void {
     ++this.verifyingCount
-    this.promise.resolve(this.verifyCb ? this.verifyCb(item) : true)
+    new this.promise<boolean>(resolve => resolve(this.verifyCb ? this.verifyCb(item) : true))
       .then(itemIsOk => {
-        --this.verifyingCount
-        if (itemIsOk) {
-          if (this.waiting.length) {
-            (this.waiting.shift() as Waiting<T>).resolve(item)
-          } else if (this.disposing) {
-            this._dispose(item)
-          } else {
-            this.idle.push(item)
-          }
-        } else {
-          this._dispose(item)
-        }
+        this._finalizeVerify(item, itemIsOk)
+      }, err => {
+        this._finalizeVerify(item, false)
+        this._handleError('verify', err)
       })
+  }
+
+  /**
+   * @hidden
+   */
+  private _finalizeVerify(item: ReleasableItem<T>, itemIsOk: boolean): void {
+    --this.verifyingCount
+    if (itemIsOk) {
+      if (this.waiting.length) {
+        (this.waiting.shift() as Waiting<T>).resolve(item)
+      } else if (this.disposing) {
+        this._dispose(item)
+      } else {
+        this.idle.push(item)
+      }
+    } else {
+      this._dispose(item)
+    }
   }
 
   /**
@@ -589,18 +682,28 @@ export class Pool<T> {
    * @hidden
    */
   private _dispose(item: ReleasableItem<T>): Promise<void> {
-    return this.promise.resolve(this.disposeCb ? this.disposeCb(item) : undefined)
+    return new this.promise<void>(resolve => resolve(this.disposeCb ? this.disposeCb(item) : undefined))
       .then(() => {
-        --this.poolSize
-        if (this.verifyingCount < this.waiting.length) {
-          this._create()
-        } else if (this.disposing) {
-          if (this.poolSize === 0) {
-            this.disposing._resolve()
-          }
-        } else if (this.poolSize < this.min) {
-          this._create()
-        }
+        this._finalizeDispose()
+      }, err => {
+        this._finalizeDispose()
+        this._handleError('dispose', err)
       })
+  }
+
+  /**
+   * @hidden
+   */
+  private _finalizeDispose(): void {
+    --this.poolSize
+    if (this.verifyingCount < this.waiting.length) {
+      this._create()
+    } else if (this.disposing) {
+      if (this.poolSize === 0) {
+        this.disposing._resolve()
+      }
+    } else if (this.poolSize < this.min) {
+      this._create()
+    }
   }
 }

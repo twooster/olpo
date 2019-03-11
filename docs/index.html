@@ -75,6 +75,14 @@
 				<p>** Documentation is available <a href="https://twooster.github.io/olpo">here</a> **</p>
 				<p>Documentation is updated every version bump. A changelog is available
 				<a href="https://github.com/twooster/olpo/blob/master/CHANGELOG.md">here</a>.</p>
+				<h2 id="motivation">Motivation</h2>
+				<p>There&#39;s a lot of pools out there. A lot of them have a lot of features,
+				but don&#39;t have the particular intersection of features I wanted.</p>
+				<ul>
+					<li>Asynchronous support everywhere</li>
+					<li>Verification of pool items</li>
+					<li>TypeScript ready, and checked</li>
+				</ul>
 				<h2 id="usage">Usage</h2>
 				<p>Create a pool:</p>
 				<pre><code class="language-typescript"><span class="hljs-keyword">import</span> { Pool } <span class="hljs-keyword">from</span> <span class="hljs-string">'olpo'</span>
@@ -170,10 +178,12 @@
   poolItem.release(!wasSuccessful)
 })</code></pre>
 				<h2 id="future-work">Future Work</h2>
-				<p>This pool should be pretty close to feature-complete, however it
-				is lacking one thing:</p>
+				<p>This pool should be pretty close to feature-complete. These are
+				potential work items in the future:</p>
 				<ul>
 					<li>100% test coverage</li>
+					<li>Potentially expiring idle pool items automatically, to keep the
+					minimum pool fresh</li>
 				</ul>
 				<h2 id="license">License</h2>
 				<p>MIT, available <a href="https://github.com/twooster/olpo/blob/master/LICENSE">here</a>.</p>
@@ -221,6 +231,9 @@
 					</li>
 					<li class=" tsd-kind-type-alias tsd-has-type-parameter tsd-is-external">
 						<a href="globals.html#item" class="tsd-kind-icon">Item</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter tsd-is-external tsd-is-not-exported">
+						<a href="globals.html#cancelidletimeout" class="tsd-kind-icon">cancel<wbr>Idle<wbr>Timeout</a>
 					</li>
 				</ul>
 			</nav>

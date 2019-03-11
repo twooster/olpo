@@ -108,10 +108,12 @@
 						<section class="tsd-index-section tsd-is-external">
 							<h3>Properties</h3>
 							<ul class="tsd-index-list">
+								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#acquiretimeout" class="tsd-kind-icon">acquire<wbr>Timeout</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#createcb" class="tsd-kind-icon">create<wbr>Cb</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#disposecb" class="tsd-kind-icon">dispose<wbr>Cb</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#disposed" class="tsd-kind-icon">disposed</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#disposing" class="tsd-kind-icon">disposing</a></li>
+								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#idletimeout" class="tsd-kind-icon">idle<wbr>Timeout</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#max" class="tsd-kind-icon">max</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#min" class="tsd-kind-icon">min</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#onacquire" class="tsd-kind-icon">on<wbr>Acquire</a></li>
@@ -119,7 +121,6 @@
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#ontimeout" class="tsd-kind-icon">on<wbr>Timeout</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#poolsize" class="tsd-kind-icon">pool<wbr>Size</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#promise" class="tsd-kind-icon">promise</a></li>
-								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#timeout" class="tsd-kind-icon">timeout</a></li>
 								<li class="tsd-kind-property tsd-parent-kind-class tsd-is-external"><a href="pool.html#verifycb" class="tsd-kind-icon">verify<wbr>Cb</a></li>
 							</ul>
 						</section>
@@ -152,7 +153,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L264">pool.ts:264</a></li>
+									<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L286">pool.ts:286</a></li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -180,12 +181,27 @@
 			<section class="tsd-panel-group tsd-member-group tsd-is-external">
 				<h2>Properties</h2>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-external">
+					<a name="acquiretimeout" class="tsd-anchor"></a>
+					<h3>acquire<wbr>Timeout</h3>
+					<div class="tsd-signature tsd-kind-icon">acquire<wbr>Timeout<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L209">pool.ts:209</a></li>
+						</ul>
+					</aside>
+					<div class="tsd-comment tsd-typography">
+						<div class="lead">
+							<p>Default acquistion timeout</p>
+						</div>
+					</div>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-external">
 					<a name="createcb" class="tsd-anchor"></a>
 					<h3>create<wbr>Cb</h3>
 					<div class="tsd-signature tsd-kind-icon">create<wbr>Cb<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">function</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L203">pool.ts:203</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L225">pool.ts:225</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -218,7 +234,7 @@
 					<div class="tsd-signature tsd-kind-icon">dispose<wbr>Cb<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">function</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L211">pool.ts:211</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L233">pool.ts:233</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -233,7 +249,7 @@
 					<div class="tsd-signature tsd-kind-icon">disposed<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">boolean</span><span class="tsd-signature-symbol"> =&nbsp;false</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L248">pool.ts:248</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L270">pool.ts:270</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -248,7 +264,7 @@
 					<div class="tsd-signature tsd-kind-icon">disposing<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">object</span><span class="tsd-signature-symbol"> =&nbsp;undefined</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L234">pool.ts:234</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L256">pool.ts:256</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -258,12 +274,27 @@
 					</div>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-external">
+					<a name="idletimeout" class="tsd-anchor"></a>
+					<h3>idle<wbr>Timeout</h3>
+					<div class="tsd-signature tsd-kind-icon">idle<wbr>Timeout<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
+					<aside class="tsd-sources">
+						<ul>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L213">pool.ts:213</a></li>
+						</ul>
+					</aside>
+					<div class="tsd-comment tsd-typography">
+						<div class="lead">
+							<p>Idle timeout</p>
+						</div>
+					</div>
+				</section>
+				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-external">
 					<a name="max" class="tsd-anchor"></a>
 					<h3>max</h3>
 					<div class="tsd-signature tsd-kind-icon">max<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L199">pool.ts:199</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L221">pool.ts:221</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -278,7 +309,7 @@
 					<div class="tsd-signature tsd-kind-icon">min<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L195">pool.ts:195</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L217">pool.ts:217</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -293,7 +324,7 @@
 					<div class="tsd-signature tsd-kind-icon">on<wbr>Acquire<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">function</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L215">pool.ts:215</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L237">pool.ts:237</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -308,7 +339,7 @@
 					<div class="tsd-signature tsd-kind-icon">on<wbr>Release<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">function</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L219">pool.ts:219</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L241">pool.ts:241</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -323,7 +354,7 @@
 					<div class="tsd-signature tsd-kind-icon">on<wbr>Timeout<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">function</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L223">pool.ts:223</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L245">pool.ts:245</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -338,7 +369,7 @@
 					<div class="tsd-signature tsd-kind-icon">pool<wbr>Size<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span><span class="tsd-signature-symbol"> =&nbsp;0</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L229">pool.ts:229</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L251">pool.ts:251</a></li>
 						</ul>
 					</aside>
 				</section>
@@ -348,7 +379,7 @@
 					<div class="tsd-signature tsd-kind-icon">promise<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">PromiseConstructor</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L187">pool.ts:187</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L205">pool.ts:205</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -358,27 +389,12 @@
 					</div>
 				</section>
 				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-external">
-					<a name="timeout" class="tsd-anchor"></a>
-					<h3>timeout</h3>
-					<div class="tsd-signature tsd-kind-icon">timeout<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">number</span></div>
-					<aside class="tsd-sources">
-						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L191">pool.ts:191</a></li>
-						</ul>
-					</aside>
-					<div class="tsd-comment tsd-typography">
-						<div class="lead">
-							<p>Default acquistion timeout</p>
-						</div>
-					</div>
-				</section>
-				<section class="tsd-panel tsd-member tsd-kind-property tsd-parent-kind-class tsd-is-external">
 					<a name="verifycb" class="tsd-anchor"></a>
 					<h3>verify<wbr>Cb</h3>
 					<div class="tsd-signature tsd-kind-icon">verify<wbr>Cb<span class="tsd-signature-symbol">:</span> <span class="tsd-signature-type">undefined</span><span class="tsd-signature-symbol"> | </span><span class="tsd-signature-type">function</span></div>
 					<aside class="tsd-sources">
 						<ul>
-							<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L207">pool.ts:207</a></li>
+							<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L229">pool.ts:229</a></li>
 						</ul>
 					</aside>
 					<div class="tsd-comment tsd-typography">
@@ -400,7 +416,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L461">pool.ts:461</a></li>
+									<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L499">pool.ts:499</a></li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -428,7 +444,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L309">pool.ts:309</a></li>
+									<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L335">pool.ts:335</a></li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -453,7 +469,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L310">pool.ts:310</a></li>
+									<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L336">pool.ts:336</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-type-parameters-title">Type parameters</h4>
@@ -494,7 +510,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L311">pool.ts:311</a></li>
+									<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L337">pool.ts:337</a></li>
 								</ul>
 							</aside>
 							<h4 class="tsd-type-parameters-title">Type parameters</h4>
@@ -535,7 +551,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L327">pool.ts:327</a></li>
+									<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L353">pool.ts:353</a></li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -606,7 +622,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L475">pool.ts:475</a></li>
+									<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L513">pool.ts:513</a></li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -642,7 +658,7 @@
 						<li class="tsd-description">
 							<aside class="tsd-sources">
 								<ul>
-									<li>Defined in <a href="https://github.com/twooster/olpo/blob/e720250/src/pool.ts#L428">pool.ts:428</a></li>
+									<li>Defined in <a href="https://github.com/twooster/olpo/blob/6c6c019/src/pool.ts#L455">pool.ts:455</a></li>
 								</ul>
 							</aside>
 							<div class="tsd-comment tsd-typography">
@@ -698,6 +714,9 @@
 								<a href="pool.html#constructor" class="tsd-kind-icon">constructor</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-external">
+								<a href="pool.html#acquiretimeout" class="tsd-kind-icon">acquire<wbr>Timeout</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-external">
 								<a href="pool.html#createcb" class="tsd-kind-icon">create<wbr>Cb</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-external">
@@ -708,6 +727,9 @@
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-external">
 								<a href="pool.html#disposing" class="tsd-kind-icon">disposing</a>
+							</li>
+							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-external">
+								<a href="pool.html#idletimeout" class="tsd-kind-icon">idle<wbr>Timeout</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-external">
 								<a href="pool.html#max" class="tsd-kind-icon">max</a>
@@ -729,9 +751,6 @@
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-external">
 								<a href="pool.html#promise" class="tsd-kind-icon">promise</a>
-							</li>
-							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-external">
-								<a href="pool.html#timeout" class="tsd-kind-icon">timeout</a>
 							</li>
 							<li class=" tsd-kind-property tsd-parent-kind-class tsd-is-external">
 								<a href="pool.html#verifycb" class="tsd-kind-icon">verify<wbr>Cb</a>
@@ -778,6 +797,9 @@
 					</li>
 					<li class=" tsd-kind-type-alias tsd-has-type-parameter tsd-is-external">
 						<a href="../globals.html#item" class="tsd-kind-icon">Item</a>
+					</li>
+					<li class=" tsd-kind-function tsd-has-type-parameter tsd-is-external tsd-is-not-exported">
+						<a href="../globals.html#cancelidletimeout" class="tsd-kind-icon">cancel<wbr>Idle<wbr>Timeout</a>
 					</li>
 				</ul>
 			</nav>

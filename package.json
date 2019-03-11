@@ -31,5 +31,5 @@
     "resource pool",
     "promise"
   ],
-  "typings": "dist/index.d.ds"
+  "typings": "dist/index.d.ts"
 }
