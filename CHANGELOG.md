@@ -1,5 +1,9 @@
 # Olpo Changeog
 
+## vNext
+
+* Allow awaiting of release from an acquired item
+
 ## v0.2.0
 
 * Added CHANGELOG

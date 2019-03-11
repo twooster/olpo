@@ -113,7 +113,7 @@ export interface BaseItem<T> {
  * @typeparam T the item type
  */
 interface ReleasableItem<T> extends BaseItem<T> {
-  release: (discard?: boolean) => void
+  release: (discard?: boolean) => Promise<void>
 }
 
 /**
@@ -375,9 +375,8 @@ export class Pool<T> {
             tid = undefined
           }
           item.lastAcquireTime = new Date()
-          item.release = (dispose?: boolean): void => {
+          item.release = (dispose?: boolean): Promise<void> =>
             this.release(item, dispose)
-          }
           this.onAcquire && this.onAcquire(item)
           resolve(item)
         },
