@@ -1,10 +1,13 @@
 {
   "name": "olpo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Olpo: A type-safe TypeScript resource pool",
   "main": "dist/index.js",
   "scripts": {
-    "build": "rimraf 'dist/*' && tsc -b tsconfig-build.json",
+    "prepublish": "npm run test",
+    "preversion": "npm run build-docs && git add docs",
+    "build": "rimraf 'dist' && tsc -b tsconfig-build.json && npm run build-docs",
+    "build-docs": "typedoc --out docs  --exclude '**/*.spec.*' --mode file ./src/index.ts",
     "cover": "jest --coverage && codecov",
     "test": "jest"
   },
@@ -16,6 +19,7 @@
     "jest": "^24.3.1",
     "rimraf": "^2.6.3",
     "ts-jest": "^24.0.0",
+    "typedoc": "^0.14.2",
     "typescript": "^3.3.3333"
   },
   "files": [

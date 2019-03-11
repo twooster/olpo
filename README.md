@@ -123,4 +123,7 @@ pool.acquire({ timeout: 1000 }).then(poolItem => {
 
 ## Future Work
 
-* A few more, and more robust, tests
+This pool should be pretty close to feature-complete, however it
+is lacking one thing:
+
+* 100% test coverage

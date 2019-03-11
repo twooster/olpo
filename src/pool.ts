@@ -1,5 +1,10 @@
+import { TimeoutError, DoubleReleaseError, PoolDisposingError } from './errors'
+
 /**
  * Pool options
+ *
+ * @typeparam T (inferred from create callback) the type of object that
+ *   the create callback generates
  */
 export interface PoolOptions<T> {
   /**
@@ -64,6 +69,9 @@ export interface PoolOptions<T> {
   promise?: PromiseConstructor
 }
 
+/**
+ * @typeparam T the item type
+ */
 export interface BaseItem<T> {
   /**
    * Initial creation time of this item
@@ -80,12 +88,12 @@ export interface BaseItem<T> {
    */
   lastReleaseTime: Date | undefined
   /**
-   * What time this item was disposed of
+   * Time this item was disposed of
    */
   disposedTime: Date | undefined
   /**
    * The number of times this item has been previously acquired (will
-   * be zero on first acquisition, until returned).
+   * be zero on first acquisition).
    */
   uses: number
   /**
@@ -98,64 +106,79 @@ export interface BaseItem<T> {
   pool: Pool<T>
 }
 
-interface InternalItem<T> extends BaseItem<T> {
+/**
+ * Full, `release`-able item.
+ *
+ * @typeparam T the item type
+ */
+interface ReleasableItem<T> extends BaseItem<T> {
   release: (discard?: boolean) => void
 }
 
-export type Item<T> = Readonly<InternalItem<T>>
+/**
+ * Structure that is passed upon acquisition. Can be `release`d.
+ *
+ * @typeparam T the item type
+ */
+export type Item<T> = Readonly<ReleasableItem<T>>
+
+/**
+ * Structure thas is passed to most callbacks -- the `release` method is not
+ * available.
+ *
+ * @typeparam T the item type
+ */
 export type InspectableItem<T> = Readonly<BaseItem<T>>
 
+/**
+ * Waiting item structure -- basically a decomposed Promise.
+ *
+ * @typeparam T the item type
+ * @hidden
+ */
 interface Waiting<T> {
   resolve(t: Item<T>): void
   reject(err: any): void
 }
 
 /**
- * Pending acquisitions will be rejected with this error if they
- * exceed the allowed timeout.
+ * Options for acquiring with a promise.
  */
-export class TimeoutError extends Error {
-  constructor(timeout: number) {
-    super(`Timeout acquiring pool item (${timeout} ms)`)
-  }
+export interface AcquireOpts {
+  /**
+   * Timeout in ms before acquisition will be rejected with a
+   * [[TimeoutError]]
+   */
+  timeout?: number
 }
 
 /**
- * Error that will be thrown if a pool item is released more than once
- * back to the pool.
+ * Options for acquiring with a callback.
  */
-export class DoubleReleaseError extends Error {
-  constructor() {
-    super('Double release of pool item')
-  }
+export interface AcquireCallbackOpts extends AcquireOpts {
+  /**
+   * Whether the acquired item should be disposed of on error.
+   */
+  disposeOnError?: boolean
+  /**
+   * If true, the "wrapped" [[Item]] will be passed into the callback.
+   * If false, the unwrapped, raw item will be passed.
+   */
+  wrappedItem?: boolean
 }
 
 /**
- * Pending acquisitions will be rejected with this error if the
- * pool is disposed with `rejectWaiting` as true
+ * @hidden
  */
-export class PoolDisposingError extends Error {
-  constructor() {
-    super('Pool disposing, all pending acquisitions cancelled')
-  }
-}
-
 const throwDoubleRelease = (): never => { throw new DoubleReleaseError() }
 
 /**
  * The resource Pool class.
+ *
+ * @typeparam (usually inferred from [[PoolOptions]]) the type of item this
+ *   pool produces
  */
 export class Pool<T> {
-  /**
-   * List containing idle items
-   * @private
-   */
-  idle: InternalItem<T>[] = []
-  /**
-   * List containing all waiting acquisitions
-   */
-  waiting: Waiting<T>[] = []
-
   /**
    * The promise constructor to use
    */
@@ -179,37 +202,40 @@ export class Pool<T> {
   /**
    * Item verification function
    */
-  verifyCb?: (t: InspectableItem<T>) => PromiseLike<boolean> | boolean
+  verifyCb: undefined | ((t: InspectableItem<T>) => PromiseLike<boolean> | boolean)
   /**
    * Item disposal function
    */
-  disposeCb?: (item: InspectableItem<T>) => PromiseLike<void> | void
+  disposeCb: undefined | ((item: InspectableItem<T>) => PromiseLike<void> | void)
   /**
    * On-acquistion callback
    */
-  onAcquire?: (item: InspectableItem<T>) => void
+  onAcquire: undefined | ((item: InspectableItem<T>) => void)
   /**
    * On-release callback
    */
-  onRelease?: (item: InspectableItem<T>) => void
+  onRelease: undefined | ((item: InspectableItem<T>) => void)
   /**
    * On timeout callback
    */
-  onTimeout?: (event: { timeout: number }) => void
+  onTimeout: undefined | ((event: { timeout: number }) => void)
 
   /*
-   * The current pool size
+   * The current pool size, counting items checked out, in creation,
+   * in verification, and in disposal.
    */
   poolSize: number = 0
-  verifyingCount: number = 0
 
   /**
-   * If set, the pool is currently disposing
+   * If not undefined, the pool is currently disposing
    */
-  disposing?: {
+  disposing: undefined | {
+    /**
+     * A promise that can be awaited for the ultimate dispoal of the pool
+     */
     promise: Promise<void>
     /**
-     * @private
+     * @hidden
      */
     _resolve: () => void
   } = undefined
@@ -219,6 +245,21 @@ export class Pool<T> {
    */
   disposed: boolean = false
 
+  /**
+   * Current number of pool items undergoing verification
+   * @hidden
+   */
+  private verifyingCount: number = 0
+  /**
+   * List containing idle items
+   * @hidden
+   */
+  private idle: ReleasableItem<T>[] = []
+  /**
+   * List containing all waiting acquisitions
+   * @hidden
+   */
+  private waiting: Waiting<T>[] = []
 
   /**
    * Instantiates a Pool class. See [[PoolOptions]] for more information on
@@ -260,44 +301,30 @@ export class Pool<T> {
    * wrapped `Item` that should be `release`d and returned to the pool after
    * it is no longer required.
    *
-   * @param opts options
-   * @param opts.timeout timeout in milliseconds before the returned Promise
-   *   is rejected
+   * @param opts acquire options
+   * @returns a promise resolving to the acquired pool item
    */
-  acquire(opts?: { timeout?: number }): Promise<Item<T>>
+  acquire(opts?: AcquireOpts): Promise<Item<T>>
+  /** @hidden */
+  acquire<U>(cb: (item: T) => U, opts?: AcquireCallbackOpts & { wrappedItem?: false }): Promise<U>
+  /** @hidden */
+  acquire<U>(cb: (item: InspectableItem<T>) => U, opts?: AcquireCallbackOpts & { wrappedItem: true }): Promise<U>
   /**
    * Acquires an item from the pool. Calls the provided callback with the
-   * (unwrapped) item upon acquisition. Automatically releases the item
-   * back to the pool after the callback returns (or throws). Returns
-   * the a Promise that resolves to the value of the provided callback.
+   * item upon acquisition, and automatically releases it back to the pool
+   * after the callback returns (or resolves if it returns a promise).
+   *
+   * There are two ways to call this method:
+   * * If `opts.wrappedItem` is not set, or is false, then the unwrapped
+   *   pool item (e.g., of type-param `T`) will be passed to the callback.
+   * * If `opts.wrappedItem` is true, then instead the callback will
+   *   receive the "wrapped" pool item, so you can inspect it.
    *
    * @param cb callback that will receive the item
-   * @param opts
-   * @param opts.wrappedItem must be false or undefined
-   * @param opts.timeout timeout in milliseconds before which this function
-   *   rejects its returned Promise with a TimeoutError.
-   * @param opts.disposeOnError if true, an error in the callback will
-   *   cause the acquired pool item to be disposed
+   * @param opts acquire options
+   * @returns a promise that resolves to the result of your callback
    */
-  acquire<U>(cb: (item: T) => U, opts?: { timeout?: number, disposeOnError?: boolean, wrappedItem?: false }): Promise<U>
-  /**
-   * Acquires an item from the pool. Calls the provided callback with the
-   * wrapped item upon acquisition. Automatically releases the item
-   * back to the pool after the callback returns (or throws). Returns
-   * the a Promise that resolves to the value of the provided callback.
-   *
-   * Be sure not to explicitly `release` the item, or a double-release
-   * error will occur.
-   *
-   * @param cb callback that will received the wrapped item
-   * @param opts
-   * @param opts.wrappedItem must be true to receive the unwrapped item
-   * @param opts.timeout timeout in milliseconds before which this function
-   *   rejects its returned Promise with a TimeoutError.
-   * @param opts.disposeOnError if true, a thrown error in the callback will
-   *   cause the acquired pool item to be disposed
-   */
-  acquire<U>(cb: (item: InspectableItem<T>) => U, opts?: { timeout?: number, disposeOnError?: boolean, wrappedItem: true }): Promise<U>
+  acquire<U>(cb: (item: InspectableItem<T> | T) => U, opts?: AcquireCallbackOpts): Promise<U>
   acquire<U>(
     cbOrOpts?: { timeout?: number } | ((item: T) => U) | ((item: InspectableItem<T>) => U),
     opts?: { timeout?: number, disposeOnError?: boolean, wrappedItem?: boolean }
@@ -330,6 +357,10 @@ export class Pool<T> {
     }
   }
 
+  /**
+   * Utiliy method to acquire an item strictly as a Promise.
+   * @hidden
+   */
   _acquire(timeout: number): Promise<Item<T>> {
     if (timeout < 0) {
       return this.promise.reject(Error(`Cannot acquire with a timeout (${timeout} ms) less than 0 ms`))
@@ -338,7 +369,7 @@ export class Pool<T> {
       let tid: any
 
       const waiting: Waiting<T> = {
-        resolve: (item: InternalItem<T>): void => {
+        resolve: (item: ReleasableItem<T>): void => {
           if (tid !== undefined) {
             clearTimeout(tid)
             tid = undefined
@@ -375,7 +406,7 @@ export class Pool<T> {
       this.waiting.push(waiting)
       if (this.verifyingCount < this.waiting.length) {
         if (this.idle.length) {
-          this._verify(this.idle.pop() as InternalItem<T>)
+          this._verify(this.idle.pop() as ReleasableItem<T>)
         } else if (this.poolSize < this.max) {
           this._create()
         }
@@ -384,14 +415,17 @@ export class Pool<T> {
   }
 
   /**
-   * Releases an item; if  `dispose` is false, the item is returned to the
-   * pool. Otherwise, the item is disposed of.
+   * Releases an item back into the pool. If  `dispose` is false, the item is
+   * returned to the pool. Otherwise, the item is disposed of.
    *
    * @param item the item to release
    * @param dispose if true, disposes of the item, otherwise releases it
    *   back into the pool.
+   * @returns a promise that can be awaited that will resolve after the
+   *   item has been added back into internal queues, or disposed if
+   *   if `dispose` was true or if the pool is currently `disposing`
    */
-  release(item: InternalItem<T> | Item<T>, dispose?: boolean): void {
+  release(item: ReleasableItem<T> | Item<T>, dispose?: boolean): Promise<void> {
     if (item.disposedTime) {
       throw new Error('Cannot release a disposed item')
     }
@@ -403,27 +437,28 @@ export class Pool<T> {
     }
 
     const now: Date = new Date()
-    ;(item as InternalItem<T>).uses += 1
-    ;(item as InternalItem<T>).release = throwDoubleRelease
-    ;(item as InternalItem<T>).lastReleaseTime = now
+    ;(item as ReleasableItem<T>).uses += 1
+    ;(item as ReleasableItem<T>).release = throwDoubleRelease
+    ;(item as ReleasableItem<T>).lastReleaseTime = now
 
     this.onRelease && this.onRelease(item)
 
     if (dispose) {
-      this._dispose(item)
+      return this._dispose(item)
     } else if (this.verifyingCount < this.waiting.length) {
       this._verify(item)
     } else if (this.disposing) {
-      this._dispose(item)
+      return this._dispose(item)
     } else {
       this.idle.push(item)
     }
+    return this.promise.resolve()
   }
 
   /**
-   * Returns the number of waiting acquisitions.
+   * The number of waiting acquisitions.
    */
-  waitingCount(): number {
+  get waitingSize(): number {
     return this.waiting.length
   }
 
@@ -476,9 +511,11 @@ export class Pool<T> {
   }
 
   /**
-   * Makes an InternalItem
+   * Makes an ReleasableItem associated with this class
+   *
+   * @hidden
    */
-  private _makeItem(item: T): InternalItem<T> {
+  private _makeItem(item: T): ReleasableItem<T> {
     return {
       creationTime: new Date(),
       disposedTime: undefined,
@@ -495,6 +532,8 @@ export class Pool<T> {
    * Creates a pool item, and handles verification of the item after creation,
    * or automatic disposal if the item is not needed and the pool is in
    * disposal.
+   *
+   * @hidden
    */
   private _create(): void {
     ++this.poolSize
@@ -522,8 +561,10 @@ export class Pool<T> {
    *
    * If verification fails, will handle disposal via `_dispose`, which handles
    * recreation if necessary to meet pool demands.
+   *
+   * @hidden
    */
-  private _verify(item: InternalItem<T>): void {
+  private _verify(item: ReleasableItem<T>): void {
     ++this.verifyingCount
     this.promise.resolve(this.verifyCb ? this.verifyCb(item) : true)
       .then(itemIsOk => {
@@ -545,9 +586,11 @@ export class Pool<T> {
   /**
    * Disposes of an item. Will trigger item recreation if necessary, or
    * potentially resolve the `disposing` promise during pool-disposal.
+   *
+   * @hidden
    */
-  private _dispose(item: InternalItem<T>): void {
-    this.promise.resolve(this.disposeCb ? this.disposeCb(item) : undefined)
+  private _dispose(item: ReleasableItem<T>): Promise<void> {
+    return this.promise.resolve(this.disposeCb ? this.disposeCb(item) : undefined)
       .then(() => {
         --this.poolSize
         if (this.verifyingCount < this.waiting.length) {

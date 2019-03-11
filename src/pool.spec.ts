@@ -1,4 +1,5 @@
-import { Pool, TimeoutError, PoolDisposingError } from './index'
+import { TimeoutError, PoolDisposingError } from './errors'
+import { Pool } from './pool'
 
 describe('Pool', () => {
   describe('constructor', () => {
