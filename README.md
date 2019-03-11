@@ -9,6 +9,13 @@ TypeScript.  It also has no external dependencies.
 
 Still pretty new. Requires ES6 support.
 
+## Documentation
+
+** Documentation is available [here](https://twooster.github.io/olpo) **
+
+Documentation is updated every version bump. A changelog is available
+[here](https://github.com/twooster/olpo/blob/master/CHANGELOG.md).
+
 ## Usage
 
 Create a pool:
@@ -127,3 +134,7 @@ This pool should be pretty close to feature-complete, however it
 is lacking one thing:
 
 * 100% test coverage
+
+## License
+
+MIT, available [here](https://github.com/twooster/olpo/blob/master/LICENSE).

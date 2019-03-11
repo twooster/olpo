@@ -71,6 +71,10 @@
 					unminified, 4.3k minified), simple, fast, Promise-native, and written in
 				TypeScript.  It also has no external dependencies.</p>
 				<p>Still pretty new. Requires ES6 support.</p>
+				<h2 id="documentation">Documentation</h2>
+				<p>** Documentation is available <a href="https://twooster.github.io/olpo">here</a> **</p>
+				<p>Documentation is updated every version bump. A changelog is available
+				<a href="https://github.com/twooster/olpo/blob/master/CHANGELOG.md">here</a>.</p>
 				<h2 id="usage">Usage</h2>
 				<p>Create a pool:</p>
 				<pre><code class="language-typescript"><span class="hljs-keyword">import</span> { Pool } <span class="hljs-keyword">from</span> <span class="hljs-string">'olpo'</span>
@@ -113,7 +117,7 @@
     <span class="hljs-keyword">if</span> (now - acq.createTime &gt; <span class="hljs-number">60000</span>) {
       <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;
     }
-    <span class="hljs-keyword">if</span> (now - acq.lastRelaseTime &gt; <span class="hljs-number">20000</span>) {
+    <span class="hljs-keyword">if</span> (now - acq.lastReleaseTime &gt; <span class="hljs-number">20000</span>) {
       <span class="hljs-keyword">return</span> <span class="hljs-literal">false</span>;
     }
     <span class="hljs-keyword">if</span> (now - acq.lastAcquireTime &gt; <span class="hljs-number">10000</span>) {
@@ -166,9 +170,13 @@
   poolItem.release(!wasSuccessful)
 })</code></pre>
 				<h2 id="future-work">Future Work</h2>
+				<p>This pool should be pretty close to feature-complete, however it
+				is lacking one thing:</p>
 				<ul>
-					<li>A few more, and more robust, tests</li>
+					<li>100% test coverage</li>
 				</ul>
+				<h2 id="license">License</h2>
+				<p>MIT, available <a href="https://github.com/twooster/olpo/blob/master/LICENSE">here</a>.</p>
 			</div>
 		</div>
 		<div class="col-4 col-menu menu-sticky-wrap menu-highlight">

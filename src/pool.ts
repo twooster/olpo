@@ -3,8 +3,8 @@ import { TimeoutError, DoubleReleaseError, PoolDisposingError } from './errors'
 /**
  * Pool options
  *
- * @typeparam T (inferred from create callback) the type of object that
- *   the create callback generates
+ * @typeparam T The type of the objet that the create call generates.
+ *   Can generally be inferred from the [[create]] attribute.
  */
 export interface PoolOptions<T> {
   /**
@@ -17,7 +17,7 @@ export interface PoolOptions<T> {
   create: () => PromiseLike<T> | T
   /**
    * Called to verify that an item is still valid for use. Note that this
-   * function will be called with a [[VerifiableItem]] -- e.g., a wrapped
+   * function will be called with a [[InspectableItem]] -- e.g., a wrapped
    * item with attributes you could use to determine item validity.
    *
    * If this function returns a Promise, that Promise will be awaited for
@@ -64,7 +64,7 @@ export interface PoolOptions<T> {
    */
   onTimeout?: (event: { timeout: number }) => void
   /**
-   * Which Promise class to use. Defaults to [[Promise]]
+   * Which Promise class to use. Defaults to ES6 `Promise`.
    */
   promise?: PromiseConstructor
 }
@@ -88,7 +88,8 @@ export interface BaseItem<T> {
    */
   lastReleaseTime: Date | undefined
   /**
-   * Time this item was disposed of
+   * Time this item was disposed of, or undefined if it has not been
+   * disposed. Typically only useful to see in the `onDispose` callback.
    */
   disposedTime: Date | undefined
   /**
@@ -97,11 +98,11 @@ export interface BaseItem<T> {
    */
   uses: number
   /**
-   * The item created by the `factory` method
+   * The item created by the `create` method this pool uses
    */
   item: T
   /**
-   * Related pool
+   * Related [[Pool]]
    */
   pool: Pool<T>
 }
@@ -157,7 +158,8 @@ export interface AcquireOpts {
  */
 export interface AcquireCallbackOpts extends AcquireOpts {
   /**
-   * Whether the acquired item should be disposed of on error.
+   * Whether the acquired item should be disposed of if the callback
+   * throws an error. Default `false`.
    */
   disposeOnError?: boolean
   /**
@@ -175,7 +177,7 @@ const throwDoubleRelease = (): never => { throw new DoubleReleaseError() }
 /**
  * The resource Pool class.
  *
- * @typeparam (usually inferred from [[PoolOptions]]) the type of item this
+ * @typeparam T (usually inferred from [[PoolOptions]]) the type of item this
  *   pool produces
  */
 export class Pool<T> {
@@ -298,16 +300,14 @@ export class Pool<T> {
 
   /**
    * Acquires an item from the pool. Returns a Promise that resolves to a
-   * wrapped `Item` that should be `release`d and returned to the pool after
-   * it is no longer required.
+   * wrapped [[Item]] that should be `release`d and returned to the pool
+   * after it is no longer required.
    *
    * @param opts acquire options
    * @returns a promise resolving to the acquired pool item
    */
   acquire(opts?: AcquireOpts): Promise<Item<T>>
-  /** @hidden */
   acquire<U>(cb: (item: T) => U, opts?: AcquireCallbackOpts & { wrappedItem?: false }): Promise<U>
-  /** @hidden */
   acquire<U>(cb: (item: InspectableItem<T>) => U, opts?: AcquireCallbackOpts & { wrappedItem: true }): Promise<U>
   /**
    * Acquires an item from the pool. Calls the provided callback with the
@@ -318,7 +318,7 @@ export class Pool<T> {
    * * If `opts.wrappedItem` is not set, or is false, then the unwrapped
    *   pool item (e.g., of type-param `T`) will be passed to the callback.
    * * If `opts.wrappedItem` is true, then instead the callback will
-   *   receive the "wrapped" pool item, so you can inspect it.
+   *   receive the "wrapped" pool [[Item]], so you can inspect it.
    *
    * @param cb callback that will receive the item
    * @param opts acquire options
@@ -415,7 +415,7 @@ export class Pool<T> {
   }
 
   /**
-   * Releases an item back into the pool. If  `dispose` is false, the item is
+   * Releases an [[Item]] back into the pool. If  `dispose` is false, the item is
    * returned to the pool. Otherwise, the item is disposed of.
    *
    * @param item the item to release
