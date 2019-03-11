@@ -16,6 +16,15 @@ Still pretty new. Requires ES6 support.
 Documentation is updated every version bump. A changelog is available
 [here](https://github.com/twooster/olpo/blob/master/CHANGELOG.md).
 
+## Motivation
+
+There's a lot of pools out there. A lot of them have a lot of features,
+but don't have the particular intersection of features I wanted.
+
+* Asynchronous support everywhere
+* Verification of pool items
+* TypeScript ready, and checked
+
 ## Usage
 
 Create a pool:
@@ -130,10 +139,12 @@ pool.acquire({ timeout: 1000 }).then(poolItem => {
 
 ## Future Work
 
-This pool should be pretty close to feature-complete, however it
-is lacking one thing:
+This pool should be pretty close to feature-complete. These are
+potential work items in the future:
 
 * 100% test coverage
+* Potentially expiring idle pool items automatically, to keep the
+  minimum pool fresh
 
 ## License
 
