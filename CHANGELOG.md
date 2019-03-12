@@ -1,10 +1,11 @@
 # Olpo Changeog
 
-## vNext
+## v0.5.0
 
 * Add an onError handler for asynchronous errors during create,
   verify, or dispose, and automatic recovery from error situations
 * Add an `idleTimeout`, and rename `timeout` to `acquireTimeout`
+* 100% test coverage
 
 ## v0.2.0
 

@@ -1,4 +1,4 @@
-import { TimeoutError, PoolDisposingError } from './errors'
+import { TimeoutError, PoolDisposingError, DoubleReleaseError } from './errors'
 import { Pool } from './pool'
 
 describe('Pool', () => {
@@ -11,10 +11,18 @@ describe('Pool', () => {
       })).toThrow()
     })
 
-    test('throws an error with a timeout < 0', () => {
+    test('throws an error with an acquireTimeout < 0', () => {
       expect(() => new Pool({
         create: () => 0,
         acquireTimeout: -1,
+        max: 1
+      })).toThrow()
+    })
+
+    test('throws an error with an idleTimeout < 0', () => {
+      expect(() => new Pool({
+        create: () => 0,
+        idleTimeout: -1,
         max: 1
       })).toThrow()
     })
@@ -47,8 +55,129 @@ describe('Pool', () => {
     })
   })
 
+  describe('#waitingSize', () => {
+    test('returns the current waiting size', async () => {
+      const p = new Pool({
+        create: () => 0,
+        max: 1,
+      })
+
+      const item1 = await p.acquire()
+      const item2Promise = p.acquire()
+      expect(p.waitingSize).toEqual(1)
+      const item3Promise = p.acquire()
+      await new Promise(resolve => setImmediate(resolve))
+      expect(p.waitingSize).toEqual(2)
+      item1.release()
+      ;(await item2Promise).release()
+      ;(await item3Promise).release()
+    })
+  })
+
+  describe('onError handler', () => {
+    test('create', async () => {
+      const onError = jest.fn()
+      let first = true
+      const p = new Pool({
+        create: async () => {
+          if (first) {
+            first = false
+            throw new Error('Oopsie')
+          }
+          return 0
+        },
+        onError,
+        max: 1
+      })
+
+      const item = await p.acquire()
+      item.release()
+      expect(onError).toHaveBeenCalledTimes(1)
+      expect(onError.mock.calls[0][0]).toEqual('create')
+    })
+
+    test('verify', async () => {
+      const onError = jest.fn()
+      let first = true
+      const p = new Pool({
+        create: () => 0,
+        verify: async () => {
+          if (first) {
+            first = false
+            throw new Error('Oopsie')
+          }
+          return true
+        },
+        onError,
+        max: 1
+      })
+
+      const item = await p.acquire()
+      item.release()
+      expect(onError).toHaveBeenCalledTimes(1)
+      expect(onError.mock.calls[0][0]).toEqual('verify')
+    })
+
+    test('dispose', async () => {
+      const onError = jest.fn()
+      let first = true
+      const p = new Pool({
+        create: () => 0,
+        dispose: () => {
+          if (first) {
+            first = false
+            throw new Error('Oopsie')
+          }
+        },
+        onError,
+        max: 1
+      })
+
+      const item = await p.acquire()
+      item.release()
+      await p.dispose()
+      expect(onError).toHaveBeenCalledTimes(1)
+      expect(onError.mock.calls[0][0]).toEqual('dispose')
+    })
+  })
+
   describe('#acquire', () => {
-    it('handles timeouts under verification time', async () => {
+    test('throws an error with a negative timeout', async () => {
+      const p = new Pool({
+        create: () => 0,
+        max: 1,
+      })
+
+      await expect(p.acquire({ timeout: -1 })).rejects.toThrow()
+    })
+
+    test('onAcquire is called on acquire', async () => {
+      const onAcquire = jest.fn()
+      const p = new Pool({
+        create: () => 0,
+        max: 1,
+        onAcquire
+      })
+
+      const item = await p.acquire()
+      expect(onAcquire).toHaveBeenCalledTimes(1)
+      item.release()
+    })
+
+    test('onTimeout is called with a timeout', async () => {
+      const onTimeout = jest.fn()
+      const p = new Pool({
+        create: () => 0,
+        max: 0,
+        onTimeout
+      })
+
+      await expect(p.acquire({ timeout: 10 })).rejects.toThrow(TimeoutError)
+      expect(onTimeout).toHaveBeenCalledTimes(1)
+      expect(onTimeout.mock.calls[0]).toEqual([{ timeout: 10}])
+    })
+
+    test('handles timeouts under verification time', async () => {
       let i = 0
       const p = new Pool({
         create: () => i++,
@@ -174,6 +303,17 @@ describe('Pool', () => {
           expect(item.item).toEqual(1)
           item.release()
         })
+      })
+
+      test('items throw on double-release', async () => {
+        const p = new Pool({
+          create: () => 0,
+          max: 1
+        })
+
+        const item = await p.acquire()
+        item.release()
+        expect(() => item.release()).toThrow(DoubleReleaseError)
       })
 
       test('it increments the uses count each time', async () => {
@@ -642,7 +782,21 @@ describe('Pool', () => {
       })
       const item = await p.acquire()
       p.release(item)
-      expect(() => p.release(item)).toThrow()
+      expect(() => p.release(item)).toThrow(DoubleReleaseError)
+    })
+
+    test('it does not allow releasing an unrelated item', async () => {
+      const p1 = new Pool({
+        create: () => {},
+        max: 1
+      })
+      const p2 = new Pool({
+        create: () => {},
+        max: 1
+      })
+
+      const item = await p1.acquire()
+      expect(() => p2.release(item)).toThrow()
     })
 
     test('it recreates after disposing with a minimum pool size', async () => {
@@ -664,6 +818,57 @@ describe('Pool', () => {
 
       item2.release()
       item3.release()
+    })
+
+    test('it triggers an onRelease callback', async () => {
+      const onRelease = jest.fn()
+      const p = new Pool({
+        create: () => 0,
+        max: 2,
+        onRelease,
+      })
+
+      const item1 = await p.acquire()
+      await p.acquire(() => {})
+      item1.release()
+
+      expect(onRelease).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('minimum pool size', () => {
+    test('automatically creates pool items', async () => {
+      const p = new Pool({
+        create: () => 0,
+        min: 3,
+        max: 10,
+      })
+      expect(p.poolSize).toEqual(3)
+    })
+
+    test('still satifies minimum pool size with a create error', async () => {
+      let resolveCreatePromise: any
+      const createPromise = new Promise(resolve => { resolveCreatePromise = resolve })
+
+      let first = true
+      const onError = jest.fn()
+      const p = new Pool({
+        create: () => {
+          if (first) {
+            first = false
+            throw new Error('Oopsie')
+          }
+          resolveCreatePromise()
+          return 0
+        },
+        onError,
+        min: 1,
+        max: 2
+      })
+
+      await createPromise
+      await p.dispose()
+      expect(onError.mock.calls[0][0]).toEqual('create')
     })
   })
 
@@ -706,7 +911,6 @@ describe('Pool', () => {
       expect(obj3.disposed).toEqual(false)
       expect(obj3.disposed).toEqual(false)
     })
-
 
     test('can dispose an empty pool', async () => {
       const p = new Pool({
@@ -751,6 +955,133 @@ describe('Pool', () => {
       await expect(item2Promise).rejects.toThrowError(PoolDisposingError)
       await expect(item3Promise).rejects.toThrowError(PoolDisposingError)
       await expect(dispose).resolves.toBeUndefined()
+    })
+
+    test('still works when called while a create is pending', async () => {
+      let resolveDisposePromise: any
+      const disposePromise = new Promise(resolve => { resolveDisposePromise = resolve })
+
+      const p = new Pool({
+        create: async () => {
+          await disposePromise
+          return 0
+        },
+        max: 1,
+        min: 1
+      })
+
+      const dispose = p.dispose()
+      resolveDisposePromise()
+      await dispose
+    })
+
+    test('still works when called when a create results in an error', async () => {
+      let resolveDisposePromise: any
+      const disposePromise = new Promise(resolve => { resolveDisposePromise = resolve })
+
+      let resolveCreatePromise: any
+      const createPromise = new Promise(resolve => { resolveCreatePromise = resolve })
+
+      const onError = jest.fn()
+      const p = new Pool({
+        create: async () => {
+          resolveCreatePromise()
+          await disposePromise
+          throw new Error('Oopsie')
+        },
+        onError,
+        max: 1,
+        min: 1
+      })
+
+      await createPromise
+      const dispose = p.dispose()
+      resolveDisposePromise()
+      await dispose
+      expect(onError).toHaveBeenCalledTimes(1)
+      expect(onError.mock.calls[0][0]).toEqual('create')
+    })
+
+    test('still works when called while a verififcation is pending', async () => {
+      let resolveDisposePromise: any
+      const disposePromise = new Promise(resolve => { resolveDisposePromise = resolve })
+
+      let resolveTimeoutPromise: any
+      const timeoutPromise = new Promise(resolve => { resolveTimeoutPromise = resolve })
+
+      const p = new Pool({
+        create: () => {
+          return 0
+        },
+        verify: async () => {
+          await timeoutPromise
+          await disposePromise
+          return true
+        },
+        max: 1,
+        min: 1
+      })
+
+      await p.acquire({ timeout: 0 }).catch(() => resolveTimeoutPromise())
+      const dispose = p.dispose()
+      resolveDisposePromise()
+      await dispose
+    })
+
+    test('allows double-disposal', async () => {
+      const p = new Pool({
+        create: () => 0,
+        max: 1
+      })
+
+      await p.acquire(() => {})
+      await p.dispose()
+      await p.dispose()
+    })
+  })
+
+  describe('idleTimeout', () => {
+    test('does not dispose below minimum', async () => {
+      const p = new Pool({
+        create: () => 0,
+        max: 3,
+        min: 1,
+        idleTimeout: 0
+      })
+
+      await new Promise(resolve => setTimeout(resolve, 5))
+      expect(p.poolSize).toEqual(1)
+
+      const item1 = await p.acquire()
+      const item2 = await p.acquire()
+      expect(p.poolSize).toEqual(2)
+
+      item2.release()
+      await new Promise(resolve => setTimeout(resolve, 5))
+      expect(p.poolSize).toEqual(1)
+
+      item1.release()
+
+      await new Promise(resolve => setTimeout(resolve, 5))
+      expect(p.poolSize).toEqual(1)
+
+      await p.dispose()
+    })
+
+    test('for coverage: cancels idle timeout on acquire', async () => {
+      const p = new Pool({
+        create: () => 0,
+        max: 1,
+        min: 1,
+        idleTimeout: 2
+      })
+
+      const item1 = await p.acquire()
+      await new Promise(resolve => setTimeout(resolve, 6))
+      expect(p.poolSize).toEqual(1)
+      item1.release()
+
+      await p.dispose()
     })
   })
 })

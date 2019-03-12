@@ -354,6 +354,10 @@ export class Pool<T> {
     if (this.onError) {
       this.onError(when, err)
     } else {
+      // There is no real way to test this, since it will result in
+      // uncaught exceptions. So long as the previous lines are covered,
+      // I'm happy that the behavior is correct.
+      /* istanbul ignore next */
       throw err
     }
   }
@@ -445,11 +449,6 @@ export class Pool<T> {
             clearTimeout(tid)
             tid = undefined
           }
-
-          // This is only needed to support disposing while max === 0
-          if (this.disposing && this.poolSize === 0) {
-            this.disposing._resolve()
-          }
           reject(err)
         }
       }
@@ -459,7 +458,7 @@ export class Pool<T> {
           this.waiting.splice(this.waiting.indexOf(waiting), 1)
           waiting.reject(new TimeoutError(timeout))
           this.onTimeout && this.onTimeout({ timeout })
-        }, timeout < 0 ? 0 : timeout)
+        }, timeout)
       }
 
       this.waiting.push(waiting)
@@ -487,9 +486,6 @@ export class Pool<T> {
    *   if `dispose` was true or if the pool is currently `disposing`
    */
   release(item: ReleasableItem<T> | Item<T>, dispose?: boolean): void {
-    if (item.disposedTime) {
-      throw new Error('Cannot release a disposed item')
-    }
     if (item.pool !== this) {
       throw new Error('Cannot release an unrelated item into the pool')
     }
@@ -624,8 +620,13 @@ export class Pool<T> {
         }
       }, err => {
         --this.poolSize
-        if ((this.verifyingCount < this.waiting.length ||
-            (this.poolSize < this.min && !this.disposing))) {
+        if (this.verifyingCount < this.waiting.length) {
+          this._create()
+        } else if (this.disposing) {
+          if (this.poolSize === 0) {
+            this.disposing._resolve()
+          }
+        } else if (this.poolSize < this.min) {
           this._create()
         }
         this._handleError('create', err)
