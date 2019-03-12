@@ -1,6 +1,6 @@
 {
   "name": "olpo",
-  "version": "0.2.0",
+  "version": "0.5.0",
   "description": "Olpo: A type-safe TypeScript resource pool",
   "main": "dist/index.js",
   "scripts": {
