@@ -1,5 +1,9 @@
 # Olpo Changeog
 
+## v0.5.2
+
+* Updated `package.json` with more complete information
+
 ## v0.5.0
 
 * Add an onError handler for asynchronous errors during create,
