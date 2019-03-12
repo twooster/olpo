@@ -4,8 +4,9 @@
   "description": "Olpo: A type-safe TypeScript resource pool",
   "main": "dist/index.js",
   "scripts": {
-    "prepublish": "npm run test",
-    "preversion": "npm run build-docs && git add docs",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run test",
+    "preversion": "npm run build-docs && git add docs && git commit -m 'Update docs'",
     "build": "rimraf 'dist' && tsc -b tsconfig-build.json && npm run build-docs",
     "build-docs": "typedoc --out docs  --exclude '**/*.spec.*' --mode file ./src/index.ts",
     "cover": "jest --coverage && codecov",
