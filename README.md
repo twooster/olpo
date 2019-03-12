@@ -4,12 +4,16 @@
 [![codecov](https://codecov.io/gh/twooster/olpo/branch/master/graph/badge.svg)](https://codecov.io/gh/twooster/olpo)
 
 OLPO is yet another TypeScript resource pool. It's written to be small (~5.5k
-minified), fast, Promise-native, and written in TypeScript.  It also has no
-external dependencies.
+minified), fast, Promise-native, and written in TypeScript.  It has no
+external dependencies and will maintain 100% test coverage.
 
-100% test coverage is a goal of the project.
+Requires ES6 support (Node >= 6.4, or a somewhat modern browser).
 
-Requires ES6 support.
+## Installation
+
+```sh
+npm install --save olpo
+```
 
 ## Documentation
 
@@ -34,7 +38,7 @@ Create a pool:
 
 ```typescript
 import { Pool } from 'olpo'
-import { SomeClass } from 'somewhere'
+import { SomeClient } from 'some-client'
 
 const pool = new Pool({
   // Required parameters:
@@ -42,7 +46,7 @@ const pool = new Pool({
   // Synchronous or asynchronous function that creates pool
   // items.
   create: async () => {
-    const cls = new SomeClass()
+    const cls = new SomeClient()
     await cls.connect()
     return cls
   }
@@ -86,8 +90,9 @@ const pool = new Pool({
   // the `dispose` flag set to true).
   // This method can be synchronous or asynchronous. If asynchronous, the
   // disposal promise will be awaited before space in the pool is released.
-  dispose(acq) { console.log('Disposed: ', acq.item) },
-
+  dispose(acq) {
+    console.log('Disposed: ', acq.item)
+  },
 
   // Callbacks. These are mainly event callbacks useful for logging -- be sure
   // not to throw errors from here, as they are not handled within the pooling
