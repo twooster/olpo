@@ -40,7 +40,7 @@ const pool = new Pool({
   // Required parameters:
 
   // Synchronous or asynchronous function that creates pool
-  // items. Item creation can be synchronous or asynchronous.
+  // items.
   create: async () => {
     const cls = new SomeClass()
     await cls.connect()
@@ -51,11 +51,11 @@ const pool = new Pool({
 
   // Optional parameters:
 
-  // Minimum pool size
+  // Minimum pool size, must be < `max`
   min: 2,
   // Which promise library to use (uses builtin ES6 Promise by default)
   promise: Bluebird,
-  // Default timeout in ms if none is specified during `acquire`
+  // Default timeout in ms if none is specified as an option during `acquire`
   acquireTimeout: 5000,
   // Timeout in ms past which idle pool items will be `dispose`d of, so long as
   // that disposal doesn't reduce past the minimum pool size
@@ -94,14 +94,20 @@ const pool = new Pool({
   // code:
 
   // Called immediately before an item is acquired
-  onAcquire(acq) { console.log('Acquired: ', acq.item) },
+  onAcquire(acq) {
+    console.log('Acquired: ', acq.item)
+  },
 
   // Called immediately after an item has been released, potentially
   // immediately before it's disposed, if necessary
-  onRelease(acq) { console.log('Released: ', acq.item) },
+  onRelease(acq) {
+    console.log('Released: ', acq.item)
+  },
 
   // Called when an acquire fails (mainly for logging)
-  onTimeout({ timeout }) { console.log('Timeout hit: ', timeout) },
+  onTimeout({ timeout }) {
+    console.log('Timeout hit: ', timeout)
+  },
 
   // Called when an asynchronous error occurs -- `type` can be `'create'`,
   // `'verify'`, or `'dispose'`, indicating errors that occur during those

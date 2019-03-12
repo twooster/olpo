@@ -550,7 +550,7 @@ export class Pool<T> {
       }
 
       let _resolve: any
-      let promise = new this.promise(resolve => {
+      const promise = new this.promise(resolve => {
         _resolve = resolve
       }).then(() => {
         this.disposing = undefined
@@ -599,7 +599,8 @@ export class Pool<T> {
   /**
    * Creates a pool item, and handles verification of the item after creation,
    * or automatic disposal if the item is not needed and the pool is in
-   * disposal.
+   * disposal. Does not handle checking whether the pool size is below
+   * the maximum -- that's the responsibility of the caller.
    *
    * @hidden
    */
