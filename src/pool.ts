@@ -481,9 +481,6 @@ export class Pool<T> {
    * @param item the item to release
    * @param dispose if true, disposes of the item, otherwise releases it
    *   back into the pool.
-   * @returns a promise that can be awaited that will resolve after the
-   *   item has been added back into internal queues, or disposed if
-   *   if `dispose` was true or if the pool is currently `disposing`
    */
   release(item: ReleasableItem<T> | Item<T>, dispose?: boolean): void {
     if (item.pool !== this) {

@@ -67,12 +67,13 @@
 				<h1 id="olpo-a-typescript-resource-pool">OLPO - A TypeScript Resource Pool</h1>
 				<p><a href="https://circleci.com/gh/twooster/olpo"><img src="https://circleci.com/gh/twooster/olpo.svg?style=svg" alt="CircleCI"></a>
 				<a href="https://codecov.io/gh/twooster/olpo"><img src="https://codecov.io/gh/twooster/olpo/branch/master/graph/badge.svg" alt="codecov"></a></p>
-				<p>OLPO is yet another TypeScript resource pool. It&#39;s written to be small (11k
-					unminified, 4.3k minified), simple, fast, Promise-native, and written in
-				TypeScript.  It also has no external dependencies.</p>
-				<p>Still pretty new. Requires ES6 support.</p>
+				<p>OLPO is yet another TypeScript resource pool. It&#39;s written to be small (~5.5k
+					minified), fast, Promise-native, and written in TypeScript.  It also has no
+				external dependencies.</p>
+				<p>100% test coverage is a goal of the project.</p>
+				<p>Requires ES6 support.</p>
 				<h2 id="documentation">Documentation</h2>
-				<p>** Documentation is available <a href="https://twooster.github.io/olpo">here</a> **</p>
+				<p><strong>Documentation is available <a href="https://twooster.github.io/olpo">here</a></strong></p>
 				<p>Documentation is updated every version bump. A changelog is available
 				<a href="https://github.com/twooster/olpo/blob/master/CHANGELOG.md">here</a>.</p>
 				<h2 id="motivation">Motivation</h2>
@@ -81,6 +82,7 @@
 				<ul>
 					<li>Asynchronous support everywhere</li>
 					<li>Verification of pool items</li>
+					<li>Idle timeouts</li>
 					<li>TypeScript ready, and checked</li>
 				</ul>
 				<h2 id="usage">Usage</h2>
@@ -93,9 +95,6 @@
 
   <span class="hljs-comment">// Synchronous or asynchronous function that creates pool</span>
   <span class="hljs-comment">// items. Item creation can be synchronous or asynchronous.</span>
-  <span class="hljs-comment">// Rejections and errors are _not_ handled by this library,</span>
-  <span class="hljs-comment">// so your create method should handle errors internally and</span>
-  <span class="hljs-comment">// always retry until creation succeeds.</span>
   create: <span class="hljs-keyword">async</span> () =&gt; {
     <span class="hljs-keyword">const</span> cls = <span class="hljs-keyword">new</span> SomeClass()
     <span class="hljs-keyword">await</span> cls.connect()
@@ -110,13 +109,15 @@
   min: <span class="hljs-number">2</span>,
   <span class="hljs-comment">// Which promise library to use (uses builtin ES6 Promise by default)</span>
   promise: Bluebird,
-  <span class="hljs-comment">// Default timeout if none is specified during `acquire`</span>
-  timeout: <span class="hljs-number">5000</span>,
+  <span class="hljs-comment">// Default timeout in ms if none is specified during `acquire`</span>
+  acquireTimeout: <span class="hljs-number">5000</span>,
+  <span class="hljs-comment">// Timeout in ms past which idle pool items will be `dispose`d of, so long as</span>
+  <span class="hljs-comment">// that disposal doesn't reduce past the minimum pool size</span>
+  idleTimeout: <span class="hljs-number">300000</span>,
 
   <span class="hljs-comment">// Called to verify a pool item to determine if it's still valid. Can be</span>
   <span class="hljs-comment">// be synchronous or asynchronous. This function should return `true` or</span>
-  <span class="hljs-comment">// `false`. Errors are not handled by the Pool library, so take care to</span>
-  <span class="hljs-comment">// handle them internally.</span>
+  <span class="hljs-comment">// `false`.</span>
   verify(acq) {
     <span class="hljs-keyword">const</span> now = <span class="hljs-keyword">new</span> <span class="hljs-built_in">Date</span>();
     <span class="hljs-keyword">if</span> (acq.uses &gt; <span class="hljs-number">30</span>) {
@@ -155,6 +156,13 @@
 
   <span class="hljs-comment">// Called when an acquire fails (mainly for logging)</span>
   onTimeout({ timeout }) { <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'Timeout hit: '</span>, timeout) },
+
+  <span class="hljs-comment">// Called when an asynchronous error occurs -- `type` can be `'create'`,</span>
+  <span class="hljs-comment">// `'verify'`, or `'dispose'`, indicating errors that occur during those</span>
+  <span class="hljs-comment">// operations</span>
+  onError(<span class="hljs-keyword">type</span>, err) {
+    <span class="hljs-built_in">console</span>.log(<span class="hljs-string">'Uncaught error when performing '</span> + <span class="hljs-keyword">type</span> + <span class="hljs-string">': '</span> + err)
+  }
 })</code></pre>
 				<p>And then acquire resources:</p>
 				<pre><code class="language-typescript">pool.acquire({ timeout: <span class="hljs-number">1000</span> }).then(<span class="hljs-function"><span class="hljs-params">poolItem</span> =&gt;</span> {
@@ -163,8 +171,8 @@
   <span class="hljs-comment">// Be sure to release</span>
   poolItem.release()
 })</code></pre>
-				<p>Or acquire them this way (automatically released when the callback
-				has completed):</p>
+				<p>Or acquire them this way (the acquired item is automatically released when the
+				callback has completed):</p>
 				<pre><code class="language-typescript">pool.acquire(<span class="hljs-function"><span class="hljs-params">someClassInstance</span> =&gt;</span> {
   someClassInstance.doStuff()
 }, { timeout: <span class="hljs-number">1000</span> })</code></pre>
@@ -177,14 +185,6 @@
   <span class="hljs-comment">// client</span>
   poolItem.release(!wasSuccessful)
 })</code></pre>
-				<h2 id="future-work">Future Work</h2>
-				<p>This pool should be pretty close to feature-complete. These are
-				potential work items in the future:</p>
-				<ul>
-					<li>100% test coverage</li>
-					<li>Potentially expiring idle pool items automatically, to keep the
-					minimum pool fresh</li>
-				</ul>
 				<h2 id="license">License</h2>
 				<p>MIT, available <a href="https://github.com/twooster/olpo/blob/master/LICENSE">here</a>.</p>
 			</div>
@@ -231,9 +231,6 @@
 					</li>
 					<li class=" tsd-kind-type-alias tsd-has-type-parameter tsd-is-external">
 						<a href="globals.html#item" class="tsd-kind-icon">Item</a>
-					</li>
-					<li class=" tsd-kind-function tsd-has-type-parameter tsd-is-external tsd-is-not-exported">
-						<a href="globals.html#cancelidletimeout" class="tsd-kind-icon">cancel<wbr>Idle<wbr>Timeout</a>
 					</li>
 				</ul>
 			</nav>

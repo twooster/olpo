@@ -3,15 +3,17 @@
 [![CircleCI](https://circleci.com/gh/twooster/olpo.svg?style=svg)](https://circleci.com/gh/twooster/olpo)
 [![codecov](https://codecov.io/gh/twooster/olpo/branch/master/graph/badge.svg)](https://codecov.io/gh/twooster/olpo)
 
-OLPO is yet another TypeScript resource pool. It's written to be small (11k
-unminified, 4.3k minified), simple, fast, Promise-native, and written in
-TypeScript.  It also has no external dependencies.
+OLPO is yet another TypeScript resource pool. It's written to be small (~5.5k
+minified), fast, Promise-native, and written in TypeScript.  It also has no
+external dependencies.
 
-Still pretty new. Requires ES6 support.
+100% test coverage is a goal of the project.
+
+Requires ES6 support.
 
 ## Documentation
 
-** Documentation is available [here](https://twooster.github.io/olpo) **
+**Documentation is available [here](https://twooster.github.io/olpo)**
 
 Documentation is updated every version bump. A changelog is available
 [here](https://github.com/twooster/olpo/blob/master/CHANGELOG.md).
@@ -23,6 +25,7 @@ but don't have the particular intersection of features I wanted.
 
 * Asynchronous support everywhere
 * Verification of pool items
+* Idle timeouts
 * TypeScript ready, and checked
 
 ## Usage
@@ -38,9 +41,6 @@ const pool = new Pool({
 
   // Synchronous or asynchronous function that creates pool
   // items. Item creation can be synchronous or asynchronous.
-  // Rejections and errors are _not_ handled by this library,
-  // so your create method should handle errors internally and
-  // always retry until creation succeeds.
   create: async () => {
     const cls = new SomeClass()
     await cls.connect()
@@ -55,13 +55,15 @@ const pool = new Pool({
   min: 2,
   // Which promise library to use (uses builtin ES6 Promise by default)
   promise: Bluebird,
-  // Default timeout if none is specified during `acquire`
-  timeout: 5000,
+  // Default timeout in ms if none is specified during `acquire`
+  acquireTimeout: 5000,
+  // Timeout in ms past which idle pool items will be `dispose`d of, so long as
+  // that disposal doesn't reduce past the minimum pool size
+  idleTimeout: 300000,
 
   // Called to verify a pool item to determine if it's still valid. Can be
   // be synchronous or asynchronous. This function should return `true` or
-  // `false`. Errors are not handled by the Pool library, so take care to
-  // handle them internally.
+  // `false`.
   verify(acq) {
     const now = new Date();
     if (acq.uses > 30) {
@@ -100,6 +102,13 @@ const pool = new Pool({
 
   // Called when an acquire fails (mainly for logging)
   onTimeout({ timeout }) { console.log('Timeout hit: ', timeout) },
+
+  // Called when an asynchronous error occurs -- `type` can be `'create'`,
+  // `'verify'`, or `'dispose'`, indicating errors that occur during those
+  // operations
+  onError(type, err) {
+    console.log('Uncaught error when performing ' + type + ': ' + err)
+  }
 })
 ```
 
@@ -114,9 +123,8 @@ pool.acquire({ timeout: 1000 }).then(poolItem => {
 })
 ```
 
-
-Or acquire them this way (automatically released when the callback
-has completed):
+Or acquire them this way (the acquired item is automatically released when the
+callback has completed):
 
 ```typescript
 pool.acquire(someClassInstance => {
@@ -136,15 +144,6 @@ pool.acquire({ timeout: 1000 }).then(poolItem => {
   poolItem.release(!wasSuccessful)
 })
 ```
-
-## Future Work
-
-This pool should be pretty close to feature-complete. These are
-potential work items in the future:
-
-* 100% test coverage
-* Potentially expiring idle pool items automatically, to keep the
-  minimum pool fresh
 
 ## License
 
