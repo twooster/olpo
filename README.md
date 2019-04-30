@@ -49,7 +49,7 @@ const pool = new Pool({
     const cls = new SomeClient()
     await cls.connect()
     return cls
-  }
+  },
   // Maximum pool size, must be > `min`
   max: 10,
 
