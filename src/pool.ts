@@ -388,9 +388,9 @@ export class Pool<T> {
    * @param opts acquire options
    * @returns a promise that resolves to the result of your callback
    */
-  acquire<U>(cb: (item: InspectableItem<T> | T) => U, opts?: AcquireCallbackOpts): Promise<U>
+  acquire<U>(cb: (item: InspectableItem<T> | T) => U | Promise<U>, opts?: AcquireCallbackOpts): Promise<U>
   acquire<U>(
-    cbOrOpts?: { timeout?: number } | ((item: T) => U) | ((item: InspectableItem<T>) => U),
+    cbOrOpts?: { timeout?: number } | ((item: T) => U | Promise<U>) | ((item: InspectableItem<T>) => U | Promise<U>),
     opts?: { timeout?: number, disposeOnError?: boolean, wrappedItem?: boolean }
   ): Promise<Item<T>> | Promise<U> {
     if (this.disposing || this.disposed) {
@@ -407,7 +407,7 @@ export class Pool<T> {
           item = i
           return wrappedItem ? i : i.item
         })
-        .then(cbOrOpts as (p: any) => U)
+        .then(cbOrOpts as (p: any) => U | Promise<U>)
         .then(result => {
           item.release()
           return result
