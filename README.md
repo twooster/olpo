@@ -3,11 +3,12 @@
 [![CircleCI](https://circleci.com/gh/twooster/olpo.svg?style=svg)](https://circleci.com/gh/twooster/olpo)
 [![codecov](https://codecov.io/gh/twooster/olpo/branch/master/graph/badge.svg)](https://codecov.io/gh/twooster/olpo)
 
-OLPO is yet another TypeScript resource pool. It's written to be small (~5.5k
+OLPO is yet another TypeScript resource pool. It's written to be small (~5.8k
 minified), fast, Promise-native, and written in TypeScript.  It has no
 external dependencies and will maintain 100% test coverage.
 
-Requires ES6 support (Node >= 6.4, or a somewhat modern browser).
+Requires ES6 support (Node >= 6.4, or a somewhat modern browser). (You may
+also cross-compile your own ES5 version by modifying `tsconfig.json`).
 
 ## Installation
 
