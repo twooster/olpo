@@ -1,3 +1,5 @@
+![logo](./OLPO.png)
+
 # OLPO - A TypeScript Resource Pool
 
 [![CircleCI](https://circleci.com/gh/twooster/olpo.svg?style=svg)](https://circleci.com/gh/twooster/olpo)
